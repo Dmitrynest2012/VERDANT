@@ -20,7 +20,7 @@ import './style.css';
 import './saves.css';
 import './optics.css';
 
-/** VERDANT v0.1.10007 — именованные сохранения, поверхностные озёра, потоковая вода и плавание. */
+/** VERDANT v0.1.10008 — именованные сохранения, поверхностные озёра, потоковая вода и плавание. */
 let saves,savePanel,activeSlot,loadedState,changingSlot=false,saveReturnMode='title',playSeconds=0,waterRenderer;
 let toolsVersion=1;
 const stage=document.getElementById('stage');
