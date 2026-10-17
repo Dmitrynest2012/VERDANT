@@ -39,80 +39,92 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = node -p "require('./package.json').version"
-          $tag = "v$version"
-          $api = "repos/$env:GITHUB_REPOSITORY/releases"
-          # Draft tags are not resolvable as public releases. Use numeric IDs for every draft operation.
-          $raw = gh api "$api`?per_page=100"
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot read release list' }
-          $found = @(($raw | ConvertFrom-Json) | Where-Object { $_.tag_name -eq $tag })
-          if ($found.Count -gt 1) { throw 'Ambiguous release tag' }
+          $ErrorActionPreference = 'Stop'
+          function Read-GitHub($endpoint) {
+            $raw = gh api $endpoint
+            if ($LASTEXITCODE -ne 0) { throw "GitHub read failed: $endpoint" }
+            return ($raw | ConvertFrom-Json)
+          }
+          function Write-GitHub($method, $endpoint, $body) {
+            $temp = Join-Path $env:RUNNER_TEMP ([Guid]::NewGuid().ToString() + '.json')
+            try {
+              $body | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $temp -Encoding utf8
+              $raw = gh api --method $method $endpoint --input $temp
+              if ($LASTEXITCODE -ne 0) { throw "GitHub write failed: $method $endpoint" }
+              return ($raw | ConvertFrom-Json)
+            } finally { Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue }
+          }
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = 'v' + $version
+          $repoApi = 'repos/' + $env:GITHUB_REPOSITORY
+          $api = $repoApi + '/releases'
+          $all = @(Read-GitHub ($api + '?per_page=100'))
+          $found = @($all | Where-Object { $_.tag_name -eq $tag })
+          if ($found.Count -gt 1) { throw 'Ambiguous version tag' }
           $release = if ($found.Count -eq 1) { $found[0] } else { $null }
           if ($null -ne $release -and -not $release.draft) {
-            Write-Host "Release $tag is published: never replace its assets"
+            Write-Host "Release $tag is already published; never overwrite it"
             exit 0
           }
-          if ($null -ne $release) {
-            # Explicit recovery of this inspected, unpublished draft only. Both previous builds passed tests and feed verification.
-            $recoveryTargets = @('6ae7d0062b00d9be01a8a8ac20d7f7e7759d761a', 'b8acc1e54197591613e9351d8b581b3d693c9820')
-            $knownRecovery = $release.id -eq 415803529 -and $tag -eq 'v0.1.10006' -and $release.target_commitish -in $recoveryTargets
-            if ($release.author.login -ne 'github-actions[bot]' -or $release.prerelease -or ($release.target_commitish -ne $env:GITHUB_SHA -and -not $knownRecovery)) {
-              throw 'An unrelated draft exists; inspect it before retrying'
+          if ($null -eq $release -and $tag -eq 'v0.1.10006') {
+            # Exact draft inspected after upload verification was blocked by an untagged draft URL.
+            $recovery = @($all | Where-Object { $_.id -eq 415808916 })
+            if ($recovery.Count -eq 1 -and $recovery[0].draft -and $recovery[0].author.login -eq 'github-actions[bot]' -and $recovery[0].target_commitish -eq 'a787e019e5fd718528c22381541f6575ed0060f7' -and $recovery[0].name -eq 'VERDANT 0.1.10006') {
+              $release = $recovery[0]
             }
           }
-          $exeFiles = @(Get-ChildItem -Path dist-release -Filter '*.exe' -File | ForEach-Object { $_.FullName })
-          if ($exeFiles.Count -ne 1) { throw 'Expected exactly one Windows installer' }
-          $latest = Join-Path (Get-Location).Path 'dist-release/latest.yml'
-          $blockmaps = @(Get-ChildItem -Path dist-release -Filter '*.blockmap' -File | ForEach-Object { $_.FullName })
-          if ($blockmaps.Count -ne 1 -or -not (Test-Path -LiteralPath $latest)) { throw 'Missing Electron update metadata' }
+          if ($null -ne $release) {
+            $knownRecovery = $release.id -eq 415808916 -and $tag -eq 'v0.1.10006' -and $release.target_commitish -eq 'a787e019e5fd718528c22381541f6575ed0060f7'
+            if (-not $release.draft -or $release.prerelease -or $release.author.login -ne 'github-actions[bot]' -or ($release.target_commitish -ne $env:GITHUB_SHA -and -not $knownRecovery)) { throw 'Unrelated draft: inspect before modifying it' }
+          }
+          # Establish an actual Git tag before assigning it to a draft. Do not mutate any existing version tag.
+          $refs = @(Read-GitHub ($repoApi + '/git/matching-refs/tags/' + $tag))
+          $ref = @($refs | Where-Object { $_.ref -eq ('refs/tags/' + $tag) })
+          if ($ref.Count -eq 0) {
+            $null = Write-GitHub 'POST' ($repoApi + '/git/refs') @{ ref = ('refs/tags/' + $tag); sha = $env:GITHUB_SHA }
+          } elseif ($ref.Count -ne 1 -or $ref[0].object.sha -ne $env:GITHUB_SHA) { throw 'Version tag already points to another commit' }
+          $exeFiles = @(Get-ChildItem dist-release -Filter '*.exe' -File | ForEach-Object { $_.FullName })
+          $blockmaps = @(Get-ChildItem dist-release -Filter '*.blockmap' -File | ForEach-Object { $_.FullName })
+          if ($exeFiles.Count -ne 1 -or $blockmaps.Count -ne 1) { throw 'Expected one installer and blockmap' }
           $assets = @($exeFiles) + @($blockmaps) + @(
-            $latest,
-            (Join-Path (Get-Location).Path ("VERDANT_v" + $version + "_PROJECT.zip")),
-            (Join-Path (Get-Location).Path ("VERDANT_v" + $version + "_TEXTURES_1K.zip")),
+            (Join-Path (Get-Location).Path 'dist-release/latest.yml'),
+            (Join-Path (Get-Location).Path ('VERDANT_v' + $version + '_PROJECT.zip')),
+            (Join-Path (Get-Location).Path ('VERDANT_v' + $version + '_TEXTURES_1K.zip')),
             (Join-Path (Get-Location).Path 'SHA256SUMS.txt')
           )
-          if ($null -eq $release) {
-            $raw = gh api --method POST $api -f tag_name=$tag -f target_commitish=$env:GITHUB_SHA -F draft=true -F prerelease=false -f name="VERDANT $version" -F body=@CHANGELOG.md
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create draft' }
-            $release = $raw | ConvertFrom-Json
-          }
-          if ($null -eq $release -or -not $release.draft) { throw 'Draft is not available' }
-          $releaseApi = "$api/$($release.id)"
-          $raw = gh api --method PATCH $releaseApi -f target_commitish=$env:GITHUB_SHA -F draft=true
-          if ($LASTEXITCODE -ne 0) { throw 'Could not set checked draft target' }
-          $release = $raw | ConvertFrom-Json
+          $body = @{ tag_name=$tag; target_commitish=$env:GITHUB_SHA; draft=$true; prerelease=$false; name=('VERDANT ' + $version); body=(Get-Content CHANGELOG.md -Raw) }
+          if ($null -eq $release) { $release = Write-GitHub 'POST' $api $body }
+          else { $release = Write-GitHub 'PATCH' ($api + '/' + $release.id) $body }
+          $releaseApi = $api + '/' + $release.id
+          if (-not $release.draft -or $release.tag_name -ne $tag -or $release.target_commitish -ne $env:GITHUB_SHA) { throw ('Draft identity mismatch: ' + ($release | Select-Object id,tag_name,target_commitish,draft | ConvertTo-Json -Compress)) }
           $uploadBase = $release.upload_url.Split('{')[0]
-          $expectedBase = "https://uploads.github.com/repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets"
+          $expectedBase = 'https://uploads.github.com/' + $repoApi + '/releases/' + $release.id + '/assets'
           if ($uploadBase -ne $expectedBase) { throw 'Unexpected upload endpoint' }
           foreach ($file in $assets) {
             $name = [IO.Path]::GetFileName($file)
-            $oldAssets = @($release.assets | Where-Object { $_.name -eq $name })
-            foreach ($old in $oldAssets) {
-              gh api --method DELETE "$api/assets/$($old.id)"
-              if ($LASTEXITCODE -ne 0) { throw "Cannot replace unpublished asset $name" }
+            foreach ($old in @($release.assets | Where-Object { $_.name -eq $name })) {
+              gh api --method DELETE ($api + '/assets/' + $old.id) --silent
+              if ($LASTEXITCODE -ne 0) { throw ('Cannot replace draft asset: ' + $name) }
             }
-            $upload = $uploadBase + '?name=' + [Uri]::EscapeDataString($name)
             $size = (Get-Item -LiteralPath $file).Length
+            $upload = $uploadBase + '?name=' + [Uri]::EscapeDataString($name)
             gh api --method POST $upload --input $file -H 'Content-Type: application/octet-stream' -H "Content-Length: $size" --silent
-            if ($LASTEXITCODE -ne 0) { throw "Upload failed: $name" }
-            Write-Host "Uploaded draft asset: $name"
+            if ($LASTEXITCODE -ne 0) { throw ('Upload failed: ' + $name) }
+            Write-Host "Uploaded: $name"
           }
-          $raw = gh api $releaseApi
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot read draft by numeric ID' }
-          $release = $raw | ConvertFrom-Json
-          if (-not $release.draft -or $release.tag_name -ne $tag -or $release.target_commitish -ne $env:GITHUB_SHA) { throw 'Draft target changed during upload' }
+          $release = Read-GitHub $releaseApi
+          if (-not $release.draft -or $release.tag_name -ne $tag -or $release.target_commitish -ne $env:GITHUB_SHA) { throw 'Draft identity changed during upload' }
           if (@($release.assets).Count -ne $assets.Count) { throw 'Unexpected asset count' }
           foreach ($file in $assets) {
             $name = [IO.Path]::GetFileName($file)
             $match = @($release.assets | Where-Object { $_.name -eq $name -and $_.state -eq 'uploaded' })
             $size = (Get-Item -LiteralPath $file).Length
             $digest = 'sha256:' + (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($match.Count -ne 1 -or $match[0].size -ne $size -or $match[0].digest -ne $digest) { throw "Uploaded asset verification failed: $name" }
+            if ($match.Count -ne 1 -or $match[0].size -ne $size -or $match[0].digest -ne $digest) { throw ('Asset integrity mismatch: ' + $name) }
           }
-          gh api --method PATCH $releaseApi -F draft=false -F prerelease=false -f make_latest=true --silent
-          if ($LASTEXITCODE -ne 0) { throw 'Could not publish verified draft' }
-          $raw = gh api $releaseApi
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot confirm publication' }
-          $published = $raw | ConvertFrom-Json
+          # Always include tag_name when publishing a draft; do not let it fall back to an untagged identifier.
+          $body.draft = $false
+          $body.make_latest = 'true'
+          $published = Write-GitHub 'PATCH' $releaseApi $body
           if ($published.draft -or $published.prerelease -or $published.tag_name -ne $tag) { throw 'Incorrect final release state' }
           Write-Host "VERDANT UPDATE CHANNEL READY: $($published.html_url)"
