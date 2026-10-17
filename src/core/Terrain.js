@@ -148,7 +148,7 @@ export function textureOrientation(x, y, z, seed = SEED) {
  */
 export function orientedFaceUV(u, v, orientation, type, faceKind) {
   if (type === BLOCK.GRASS && faceKind === 1) {
-    return [orientation & 4 ? 1 - u : u, v];
+    return [u, v];
   }
   return orientedUV(u, v, orientation);
 }

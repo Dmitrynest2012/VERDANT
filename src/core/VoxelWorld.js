@@ -27,6 +27,12 @@ export class VoxelWorld {
   constructor(scene, materials, savedEdits = null, seed = SEED) {
     this.scene = scene;
     this.materials = materials;
+    this.lodMaterial = materials[0].clone();
+    this.lodMaterial.side = THREE.DoubleSide;
+    this.lodMaterial.shadowSide = THREE.DoubleSide;
+    this.lodMaterial.polygonOffset = true;
+    this.lodMaterial.polygonOffsetFactor = 0.4;
+    this.lodMaterial.polygonOffsetUnits = 1;
     this.seed = seed;
     this.edits = new Map();
     this.columnEdits = new Map();
@@ -225,11 +231,12 @@ export class VoxelWorld {
     for(let i=0;i<xs.length-1;i++)for(let j=0;j<zs.length-1;j++){
       const mx=(xs[i]+xs[i+1])*.5,mz=(zs[j]+zs[j+1])*.5;
       const player=this.streamOrigin;
-      if(player&&Math.hypot(mx-player.x,mz-player.z)<this.nearRadius-18)continue;
+      const maskRadius=this.nearRadius + step * 1.2;
+      if(player&&Math.hypot(mx-player.x,mz-player.z)<maskRadius)continue;
       const a=i*ny+j,b=(i+1)*ny+j,c=a+1,d=b+1;
       indices.push(a,c,b,b,c,d);
     }
-    const skirtDrop=Math.max(12,step*1.6);
+    const skirtDrop=Math.max(22,step*2.2);
     const addSkirt=(a,b)=>{
       const a2=addVertex(pos[a*3],pos[a*3+2],skirtDrop);
       const b2=addVertex(pos[b*3],pos[b*3+2],skirtDrop);
@@ -245,7 +252,7 @@ export class VoxelWorld {
     geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
     geo.setIndex(indices);
     geo.computeVertexNormals();geo.computeTangents();geo.computeBoundingSphere();
-    const mesh=new THREE.Mesh(geo,this.materials[0]);
+    const mesh=new THREE.Mesh(geo,this.lodMaterial);
     mesh.name=`far-lod(${tx},${tz},${step})`;
     mesh.castShadow=false;mesh.receiveShadow=true;
     mesh.frustumCulled=true;

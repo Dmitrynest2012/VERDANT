@@ -13,7 +13,7 @@ import { UI } from './ui/UI.js';
 import { WorldMap } from './ui/WorldMap.js';
 import './style.css';
 
-/** VERDANT v0.1.10005 — исправлен запуск UI, автоматическое обновление ZIP и согласование версии на всех экранах. */
+/** VERDANT v0.1.10006 — облака и солнце 2.0, ускоренная карта, переносной бур и аудио-поиск по нескольким именам. */
 const SAVE_KEY = 'verdant-world-v1';
 const stage = document.getElementById('stage');
 const keys = new Set();
@@ -43,11 +43,13 @@ let musicVolume = 0.30;
 let lastTime = 0;
 let flashlightEnabled = false;
 const direction = new THREE.Vector3();
-const music = new Audio('/audio/relax.mp3');
+const MUSIC_CANDIDATES = ['/audio/relax.mp3','/audio/music.mp3','/audio/verdant.mp3','/audio/ambient.mp3','/audio/track.mp3','/audio/relax.ogg','/audio/music.ogg'];
+let musicPath = MUSIC_CANDIDATES[0];
+const music = new Audio(musicPath);
 music.loop = true;
 music.preload = 'metadata';
 music.addEventListener('error', () => {
-  if (ui) ui.setMusicStatus('Аудио не воспроизводится: проверьте public/audio/relax.mp3 и формат MP3.',true);
+  if (ui) ui.setMusicStatus('Аудио не воспроизводится: проверьте public/audio/ (relax/music/ambient/track) и формат MP3/OGG.',true);
 });
 
 function readSave() {
@@ -121,14 +123,23 @@ async function loadMaterials() {
 
 /** Браузер может отдавать index.html вместо отсутствующего MP3: проверяем тип. */
 async function checkMusicFile() {
-  try {
-    const response=await fetch('/audio/relax.mp3',{method:'HEAD',cache:'no-store'});
-    const type=(response.headers.get('content-type')||'').toLowerCase();
-    musicAvailable=response.ok && !type.includes('text/html') && !type.includes('text/plain');
-  } catch {musicAvailable=false;}
-  musicFileChecked=true;
-  if(!musicAvailable) ui.setMusicStatus('Файл не найден. Поместите relax.mp3 в public/audio/ и нажмите N.',true);
-  else ui.setMusicStatus(musicPlaying?'▶ Музыка воспроизводится.':'Файл найден. Музыка включится при входе в игру.');
+  musicAvailable = false;
+  for (const candidate of MUSIC_CANDIDATES) {
+    try {
+      const response = await fetch(candidate, { method: 'HEAD', cache: 'no-store' });
+      const type = (response.headers.get('content-type') || '').toLowerCase();
+      const okay = response.ok && !type.includes('text/html') && !type.includes('text/plain');
+      if (okay) {
+        musicAvailable = true;
+        musicPath = candidate;
+        music.src = musicPath;
+        break;
+      }
+    } catch {}
+  }
+  musicFileChecked = true;
+  if (!musicAvailable) ui.setMusicStatus('Файл не найден. Положите MP3/OGG в public/audio/ как relax, music, ambient или track и нажмите N.', true);
+  else ui.setMusicStatus(musicPlaying ? '▶ Музыка воспроизводится.' : `Файл найден (${musicPath.split('/').at(-1)}). Музыка включится при входе в игру.`);
   return musicAvailable;
 }
 
@@ -138,6 +149,9 @@ async function startMusic(showToast=false) {
     // ВАЖНО: play() должен вызываться синхронно в обработчике клика/M.
     // Нельзя ожидать fetch(HEAD), иначе браузер потеряет user activation.
     // При добавлении MP3 после загрузки игры переоткроем источник.
+    if (!musicFileChecked) await checkMusicFile();
+    if (!musicAvailable) throw new Error('missing-audio');
+    if (music.src !== new URL(musicPath, window.location.href).href) music.src = musicPath;
     if(music.error) music.load();
     const request=music.play();
     await request;
@@ -150,10 +164,10 @@ async function startMusic(showToast=false) {
     musicPlaying=false;ui.setMusic(false);
     const missing=musicFileChecked && !musicAvailable;
     ui.setMusicStatus(missing
-      ? 'Файл не найден: public/audio/relax.mp3. Положите туда MP3 и снова нажмите N.'
+      ? 'Файл не найден: public/audio/(relax|music|ambient|track). Положите туда MP3/OGG и снова нажмите N.'
       : `Звук не запущен (${error?.name||'ошибка'}): проверьте файл, громкость и разрешения вкладки.`,true);
     console.warn('Аудио не воспроизводится:',error);
-    if(showToast) ui.toast(missing?'Музыка не найдена: public/audio/relax.mp3':'Не удалось включить звук: проверьте MP3 и звук вкладки.',3600);
+    if(showToast) ui.toast(missing?'Музыка не найдена: public/audio/(relax|music|ambient|track)':'Не удалось включить звук: проверьте MP3/OGG и звук вкладки.',3600);
     return false;
   }
 }
@@ -401,6 +415,7 @@ function stepInteraction(dt) {
     miningProgress += dt / 0.48;
     mineSwingTimer += dt;
     if (mineSwingTimer > 0.37) { mineSwingTimer = 0; ui.swingPickaxe(); }
+    ui.setToolWorking(true);
     if (miningProgress >= 1) {
       breakBlock(selectedTarget);
       miningProgress = 0;
@@ -409,6 +424,7 @@ function stepInteraction(dt) {
   } else {
     miningProgress = 0;
     miningTargetKey = '';
+    ui.setToolWorking(false);
   }
   if (mouse.right) {
     rightRepeat += dt;
@@ -449,6 +465,7 @@ function tick(t) {
   } else {
     fx.setTarget(null);
     ui.setTarget(null);
+    ui.setToolWorking(false);
   }
   lighting.render();
   if (lighting.faulted && ui.giInput.checked) {

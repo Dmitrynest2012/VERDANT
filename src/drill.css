@@ -1,0 +1,22 @@
+/* Экранный инструмент v0.1.10006: отдельный слой оформления, без изменения базового HUD. */
+#pickaxe{position:absolute;bottom:-22px;right:clamp(46px,9vw,212px);width:255px;height:265px;pointer-events:none;filter:drop-shadow(8px 12px 18px rgba(7,22,28,.42));transform:rotate(-17deg);transform-origin:84% 100%;perspective:900px}
+.drill-body{position:absolute;inset:0;transform-style:preserve-3d}
+.drill-top{position:absolute;right:64px;bottom:98px;width:124px;height:72px;border-radius:28px 28px 22px 18px;background:linear-gradient(145deg,#f9f7e6 0%,#c8d2d3 32%,#6f858e 58%,#b6c7cb 73%,#4d616a 100%);border:2px solid rgba(56,72,80,.85);box-shadow:inset -8px -10px 12px rgba(36,56,68,.30),inset 8px 10px 12px rgba(255,255,255,.18);transform:translateZ(18px)}
+.drill-top::before{content:'';position:absolute;left:16px;top:14px;width:54px;height:11px;border-radius:999px;background:linear-gradient(90deg,rgba(255,255,255,.06),rgba(255,255,255,.72),rgba(255,255,255,.05));filter:blur(.2px)}
+.drill-panel{position:absolute;right:112px;bottom:111px;width:56px;height:34px;border-radius:11px;background:linear-gradient(180deg,#305862,#1a3139);border:2px solid rgba(255,255,255,.12);box-shadow:inset 0 0 12px rgba(120,215,245,.24)}
+.drill-panel::after{content:'';position:absolute;inset:8px 10px;border-radius:7px;background:linear-gradient(180deg,rgba(111,232,255,.72),rgba(89,182,211,.18))}
+.drill-grip{position:absolute;right:84px;bottom:30px;width:38px;height:106px;border-radius:18px;background:linear-gradient(180deg,#36454d,#131f24 38%,#2d4047 75%,#465b64);border:2px solid rgba(54,66,73,.92);transform:skewX(-8deg) translateZ(-2px);box-shadow:inset 3px 0 4px rgba(255,255,255,.10),inset -4px 0 8px rgba(0,0,0,.20)}
+.drill-grip::before{content:'';position:absolute;left:7px;right:7px;top:14px;bottom:14px;border-radius:12px;background:repeating-linear-gradient(180deg,rgba(255,255,255,.07) 0 8px,rgba(0,0,0,.12) 8px 16px)}
+.drill-chuck{position:absolute;right:28px;bottom:112px;width:62px;height:38px;border-radius:17px;background:linear-gradient(180deg,#5d7179,#233840);border:2px solid rgba(33,44,49,.94);transform:translateZ(8px)}
+.drill-bit{position:absolute;right:-16px;bottom:108px;width:82px;height:46px;transform-style:preserve-3d;transform-origin:12px 50%;animation:drillIdle 2.8s ease-in-out infinite}
+.drill-bit span{position:absolute;display:block;left:0;top:50%;width:78px;height:12px;margin-top:-6px;border-radius:999px;background:linear-gradient(90deg,#fef8ea 0%,#c7d2d6 18%,#7f949d 55%,#eef7f7 74%,#6c818a 100%);clip-path:polygon(0 20%,42% 0,100% 50%,42% 100%,0 80%,10% 50%);box-shadow:0 0 8px rgba(255,255,255,.08)}
+.drill-bit span:nth-child(1){transform:rotate(0deg) translateZ(0)}
+.drill-bit span:nth-child(2){transform:rotate(60deg) translateZ(0)}
+.drill-bit span:nth-child(3){transform:rotate(120deg) translateZ(0)}
+#pickaxe.swing{animation:drillSwing .25s ease-in-out}
+#pickaxe.working .drill-bit{animation:drillspin .09s linear infinite}
+@keyframes drillSwing{0%{transform:rotate(-17deg) translate(0,0)}48%{transform:rotate(-46deg) translate(-28px,16px)}100%{transform:rotate(-17deg) translate(0,0)}}
+@keyframes drillspin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes drillIdle{0%,100%{transform:rotate(0deg)}50%{transform:rotate(10deg)}}
+.sun-bloom{position:absolute;width:340px;height:340px;border-radius:50%;display:none;mix-blend-mode:screen;background:radial-gradient(circle, rgba(255,245,197,.20) 0%, rgba(255,230,182,.11) 22%, rgba(255,206,148,.045) 48%, rgba(255,183,132,0) 72%);filter:blur(1px)}
+@media(max-width:720px){#pickaxe{right:-14px;bottom:-82px;transform:rotate(-17deg) scale(.62);transform-origin:bottom right}}

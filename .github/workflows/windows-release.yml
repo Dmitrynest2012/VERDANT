@@ -28,8 +28,12 @@ jobs:
         shell: pwsh
         run: |
           python scripts/make-release.py
+          if ($LASTEXITCODE -ne 0) { throw 'Release ZIP assembly failed' }
           $version = node -p "require('./package.json').version"
           node scripts/verify-release.mjs "VERDANT_v${version}_PROJECT.zip" "VERDANT_v${version}_TEXTURES_1K.zip"
+          if ($LASTEXITCODE -ne 0) { throw 'Source and content verification failed' }
+          node scripts/verify-desktop-release.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Electron update metadata verification failed' }
       - name: Publish GitHub Release only after checks
         shell: pwsh
         env:
@@ -37,21 +41,38 @@ jobs:
         run: |
           $version = node -p "require('./package.json').version"
           $tag = "v$version"
-          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          $existing = gh release view $tag --repo $env:GITHUB_REPOSITORY --json isDraft 2>$null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag exists: do not overwrite immutable release"
+            if (($existing | ConvertFrom-Json).isDraft) { throw "Draft $tag already exists; inspect it before retrying" }
+            Write-Host "Release $tag exists: do not overwrite published releases"
             exit 0
           }
           $exeFiles = @(Get-ChildItem -Path dist-release -Filter '*.exe' -File | ForEach-Object { $_.FullName })
           if ($exeFiles.Count -ne 1) { throw "Expected exactly one Windows installer; found $($exeFiles.Count)" }
           $latest = Join-Path (Get-Location).Path 'dist-release/latest.yml'
-          if (-not (Test-Path -LiteralPath $latest)) { throw 'electron-builder did not generate latest.yml' }
+          if (-not (Test-Path -LiteralPath $latest)) { throw 'Missing latest.yml' }
           $blockmaps = @(Get-ChildItem -Path dist-release -Filter '*.blockmap' -File | ForEach-Object { $_.FullName })
+          if ($blockmaps.Count -ne 1) { throw 'Expected exactly one blockmap' }
           $assets = @($exeFiles) + @($blockmaps) + @(
             $latest,
             (Join-Path (Get-Location).Path ("VERDANT_v" + $version + "_PROJECT.zip")),
             (Join-Path (Get-Location).Path ("VERDANT_v" + $version + "_TEXTURES_1K.zip")),
             (Join-Path (Get-Location).Path 'SHA256SUMS.txt')
           )
-          gh release create $tag --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY --title "VERDANT $version" --notes-file CHANGELOG.md @assets
-          if ($LASTEXITCODE -ne 0) { throw "GitHub Release publishing failed: exit code $LASTEXITCODE" }
+          gh release create $tag --draft --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY --title "VERDANT $version" --notes-file CHANGELOG.md @assets
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to create draft and upload assets' }
+          $raw = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$tag"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify uploaded assets' }
+          $release = $raw | ConvertFrom-Json
+          foreach ($file in $assets) {
+            $name = [IO.Path]::GetFileName($file)
+            $match = @($release.assets | Where-Object { $_.name -eq $name -and $_.state -eq 'uploaded' -and $_.size -gt 0 })
+            if ($match.Count -ne 1) { throw "Missing or incomplete asset $name" }
+          }
+          gh release edit $tag --repo $env:GITHUB_REPOSITORY --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to publish verified release' }
+          $published = gh release view $tag --repo $env:GITHUB_REPOSITORY --json isDraft,isPrerelease,tagName,url
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify publication' }
+          $data = $published | ConvertFrom-Json
+          if ($data.isDraft -or $data.isPrerelease -or $data.tagName -ne $tag) { throw 'Incorrect published release state' }
+          Write-Host "VERDANT UPDATE CHANNEL READY: $($data.url)"

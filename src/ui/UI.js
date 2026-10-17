@@ -122,7 +122,7 @@ export class UI {
       if (n) n.textContent = index < HOTBAR_COUNT ? String(index + 1) : '';
     }
     const chosen = this.inventory.get(this.selected);
-    $('selected-label').textContent = chosen ? BLOCK_ITEMS[chosen.id]?.title ?? chosen.id : 'Кирка';
+    $('selected-label').textContent = chosen ? BLOCK_ITEMS[chosen.id]?.title ?? chosen.id : 'Переносной бур';
     $('action-hint').textContent = chosen ? 'ЛКМ — добыть · ПКМ — поставить' : 'ЛКМ — добыть · Возьми блок для строительства';
     this.heldStack.classList.toggle('hidden', !this.inventory.held || this.mode !== 'inventory');
     if (this.inventory.held) {
@@ -259,6 +259,12 @@ export class UI {
     el.classList.remove('swing');
     void el.offsetWidth;
     el.classList.add('swing');
+  }
+
+
+  setToolWorking(active) {
+    const el = $('pickaxe');
+    if (el) el.classList.toggle('working', Boolean(active));
   }
 
   toast(message, duration = 2700) {

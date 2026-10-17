@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#6ca7dd" />
     <meta name="description" content="Verdant — расслабляющая воксельная песочница с WebGPU" />
     <title>VERDANT — Воксельная песочница</title>
+    <link rel="stylesheet" href="/src/drill.css" />
   </head>
   <body>
     <div id="app">
@@ -13,7 +14,7 @@
 
       <div id="hud" class="hidden">
         <div class="hud-top">
-          <div class="brand-chip"><span class="brand-symbol">✦</span><span>VERDANT</span><span class="alpha-mark">ALPHA 0.1.10005</span></div>
+          <div class="brand-chip"><span class="brand-symbol">✦</span><span>VERDANT</span><span class="alpha-mark">ALPHA 0.1.10006</span></div>
           <div class="world-stats"><span id="fps">-- FPS</span><span id="stream-stats" title="Воксельные секции / LOD-плитки / очередь загрузки">Загрузка…</span><span id="backend">GPU…</span><span id="normals-status">Нормали …</span></div>
         </div>
         <aside class="nav-widget" aria-label="Навигация по миру">
@@ -27,11 +28,11 @@
         <div id="target-label" class="hidden">Зелёная земля</div>
         <div id="mining-progress" class="hidden"><div id="mining-fill"></div></div>
         <div class="hud-bottom">
-          <div class="selected-title"><span id="selected-label">Зелёная земля</span><span id="action-hint">ЛКМ — добыть · ПКМ — поставить</span></div>
+          <div class="selected-title"><span id="selected-label">Переносной бур</span><span id="action-hint">ЛКМ — добыть · ПКМ — поставить</span></div>
           <div id="hotbar" class="hotbar" aria-label="Быстрые слоты"></div>
           <div class="bottom-tips">WASD — двигаться <span>·</span> Shift — бег <span>·</span> Пробел — прыжок <span>·</span> E — инвентарь <span>·</span> F — фонарь <span>·</span> M — карта <span>·</span> N — музыка</div>
         </div>
-        <div id="pickaxe" class="pickaxe" aria-hidden="true"><div class="pick-handle"></div><div class="pick-metal"></div><div class="pick-highlight"></div></div>
+        <div id="pickaxe" class="pickaxe" aria-hidden="true"><div class="drill-body"><div class="drill-top"></div><div class="drill-panel"></div><div class="drill-grip"></div><div class="drill-chuck"></div><div class="drill-bit"><span></span><span></span><span></span></div></div></div>
       </div>
 
       <div id="map-screen" class="overlay map-screen hidden" aria-label="Топографическая карта мира">
@@ -62,9 +63,9 @@
             <button id="start-btn" class="primary-btn">Войти в мир <span>→</span></button>
             <button id="new-btn" class="secondary-btn hidden">Начать заново</button>
           </div>
-          <div class="cover-note">WebGPU · 6 слоёв грунта · Объёмные облака · Фонарик · Автосохранение</div>
+          <div class="cover-note">WebGPU · Облака 2.0 · Переносной бур · Фонарик · Автосохранение</div>
         </div>
-        <div class="cover-bottom"><span>EARLY BUILD · 0.1.10005</span><span>Нажми «Войти в мир», чтобы захватить курсор</span></div>
+        <div class="cover-bottom"><span>EARLY BUILD · 0.1.10006</span><span>Нажми «Войти в мир», чтобы захватить курсор</span></div>
       </div>
 
       <div id="pause-screen" class="overlay hidden">

@@ -1,8 +1,9 @@
 import { MAP_DIAMETERS, MAP_PIXEL_SIZE, clampMapLevel, mapWorldPosition, sampleMapPixel } from '../core/MapSampling.js';
 
 /**
- * Пиксельная топографическая карта. Обработка ограничена строками за кадр:
- * ни WebGPU, ни физика не блокируются синхронной генерацией всей карты.
+ * Пиксельная топографическая карта. Обновляется прогрессивно: сперва грубый
+ * предварительный слой, затем 2× уточнение и только потом финальная детализация.
+ * Это делает смену зума визуально отзывчивой и уменьшает подвисания.
  */
 export class WorldMap {
   constructor(canvas, world) {
@@ -46,8 +47,24 @@ export class WorldMap {
       centerX: this.center.x,
       centerZ: this.center.z,
       diameter: this.diameter,
-      row: 0
+      row: 0,
+      pass: 0,
+      stride: 4
     };
+  }
+
+  fillBlock(job, col, row, stride, color) {
+    const px = this.size;
+    const data = job.image.data;
+    const maxRow = Math.min(px, row + stride);
+    const maxCol = Math.min(px, col + stride);
+    for (let y = row; y < maxRow; y++) {
+      for (let x = col; x < maxCol; x++) {
+        const offset = (y * px + x) * 4;
+        data[offset] = color[0]; data[offset + 1] = color[1];
+        data[offset + 2] = color[2]; data[offset + 3] = 255;
+      }
+    }
   }
 
   drawMarker(x, z, yaw, diameter) {
@@ -98,27 +115,34 @@ export class WorldMap {
     if (!this.job && (!this.hadFullDraw || movingZoom || performance.now() - this.lastDraw > 900)) this.job = this.makeJob();
     if (!this.job) return;
     const job = this.job;
-    const samples = job.image.data;
-    const end = Math.min(this.size, job.row + 20);
     const px = this.size;
-    for (let row = job.row; row < end; row++) {
-      for (let col = 0; col < px; col++) {
-        const pos = mapWorldPosition(col, row, px, job.centerX, job.centerZ, job.diameter);
-        const color = sampleMapPixel(this.world, pos.x, pos.z, job.diameter / px);
-        const offset = (row * px + col) * 4;
-        samples[offset] = color[0]; samples[offset + 1] = color[1];
-        samples[offset + 2] = color[2]; samples[offset + 3] = 255;
+    const rowsPerFrame = job.stride === 4 ? 22 : job.stride === 2 ? 16 : 12;
+    const end = Math.min(this.size, job.row + rowsPerFrame * job.stride);
+    for (let row = job.row; row < end; row += job.stride) {
+      for (let col = 0; col < px; col += job.stride) {
+        const pos = mapWorldPosition(col + job.stride * 0.5 - 0.5, row + job.stride * 0.5 - 0.5, px, job.centerX, job.centerZ, job.diameter);
+        const color = sampleMapPixel(this.world, pos.x, pos.z, (job.diameter / px) * job.stride);
+        this.fillBlock(job, col, row, job.stride, color);
       }
     }
     job.row = end;
-    if (job.row === this.size) {
+    if (job.row >= this.size) {
+      if (job.stride > 1) {
+        job.pass += 1;
+        job.stride = job.pass === 1 ? 2 : 1;
+        job.row = 0;
+      } else {
+        this.context.putImageData(job.image, 0, 0);
+        this.drawMarker(p.x, p.z, player.yaw, job.diameter);
+        this.hadFullDraw = true;
+        this.lastDraw = performance.now();
+        this.job = null;
+        this.rangeLabel.textContent = `Охват ${Math.round(job.diameter)} × ${Math.round(job.diameter)} м`;
+        this.coordLabel.textContent = `X ${p.x.toFixed(1)}  ·  Z ${p.z.toFixed(1)}  ·  Y ${p.y.toFixed(1)} м`;
+      }
+    } else if (job.pass === 0 && job.row >= this.size * 0.25) {
       this.context.putImageData(job.image, 0, 0);
       this.drawMarker(p.x, p.z, player.yaw, job.diameter);
-      this.hadFullDraw = true;
-      this.lastDraw = performance.now();
-      this.job = null;
-      this.rangeLabel.textContent = `Охват ${Math.round(job.diameter)} × ${Math.round(job.diameter)} м`;
-      this.coordLabel.textContent = `X ${p.x.toFixed(1)}  ·  Z ${p.z.toFixed(1)}  ·  Y ${p.y.toFixed(1)} м`;
     }
   }
 }

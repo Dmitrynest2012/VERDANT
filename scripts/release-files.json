@@ -1,5 +1,5 @@
 {
-  "version": "0.1.10005",
+  "version": "0.1.10006",
   "files": [
     ".github/workflows/windows-release.yml",
     ".gitignore",
@@ -13,6 +13,7 @@
     "docs/GITHUB_RELEASES.md",
     "docs/GRASS_VARIATION.md",
     "docs/PROJECT_RULES.md",
+    "docs/RELEASE_DELIVERY.md",
     "docs/TECH_RULES.md",
     "docs/WORLD_STREAMING.md",
     "electron/main.cjs",
@@ -28,6 +29,7 @@
     "scripts/release-files.json",
     "scripts/release-manager.mjs",
     "scripts/update-status.mjs",
+    "scripts/verify-desktop-release.mjs",
     "scripts/verify-release.mjs",
     "scripts/zip-safe.mjs",
     "src/core/Drops.js",
@@ -40,6 +42,7 @@
     "src/core/StreamPlanner.js",
     "src/core/Terrain.js",
     "src/core/VoxelWorld.js",
+    "src/drill.css",
     "src/gfx/Clouds.js",
     "src/gfx/Effects.js",
     "src/gfx/Environment.js",
@@ -48,6 +51,7 @@
     "src/style.css",
     "src/ui/UI.js",
     "src/ui/WorldMap.js",
+    "tests/delivery.test.mjs",
     "tests/graphics.test.mjs",
     "tests/inventory.test.mjs",
     "tests/layers.test.mjs",

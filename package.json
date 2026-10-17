@@ -1,9 +1,9 @@
 {
   "name": "verdant-voxel",
   "private": true,
-  "version": "0.1.10005",
+  "version": "0.1.10006",
   "type": "module",
-  "description": "VERDANT: Electron, топографическая карта, обновления GitHub и фикс боковых текстур травы",
+  "description": "VERDANT: облака и солнце 2.0, переносной бур, ускоренная карта, улучшенный звук",
   "scripts": {
     "dev": "node scripts/desktop-dev.mjs",
     "dev:browser": "node scripts/dev-entry.mjs",
