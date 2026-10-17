@@ -1,0 +1,45 @@
+name: Windows Release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: verdant-release
+  cancel-in-progress: false
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Automated tests
+        run: npm test
+      - name: Vite bundle
+        run: npm run build
+      - name: Build Electron NSIS installer
+        run: npx electron-builder --win nsis --publish never
+      - name: Assemble release ZIPs, checksums, verify
+        shell: pwsh
+        run: |
+          python scripts/make-release.py
+          $version = node -p "require('./package.json').version"
+          node scripts/verify-release.mjs "VERDANT_v${version}_PROJECT.zip" "VERDANT_v${version}_TEXTURES_1K.zip"
+      - name: Publish GitHub Release only after checks
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          $tag = "v$version"
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag exists: do not overwrite immutable release"
+            exit 0
+          }
+          gh release create $tag --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY --title "VERDANT $version" --notes-file CHANGELOG.md "dist-release/*.exe" "dist-release/*.blockmap" "dist-release/latest.yml" "VERDANT_v${version}_PROJECT.zip" "VERDANT_v${version}_TEXTURES_1K.zip" "SHA256SUMS.txt"

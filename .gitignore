@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.vite/
+*.log
+.DS_Store
+
+# Локальные служебные файлы автообновления
+.verdant-update/
+*.verdant-new-*
+
+dist-release/
+artifacts/
