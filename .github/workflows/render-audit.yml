@@ -1,0 +1,32 @@
+name: Render Audit Fixture
+on:
+  push:
+    branches: ['qa/render-fixes-0.1.10008']
+permissions:
+  contents: read
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Archive exact source and pinned Three.js for offline render diagnostics
+        shell: python
+        run: |
+          import subprocess, tarfile, pathlib
+          files = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+          with tarfile.open('verdant-render-fixture.tar.gz', 'w:gz') as archive:
+              for name in files:
+                  if name and pathlib.Path(name).is_file():
+                      archive.add(name, arcname=name)
+              archive.add('node_modules/three', arcname='node_modules/three')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verdant-render-fixture
+          path: verdant-render-fixture.tar.gz
+          retention-days: 3
+          compression-level: 0
