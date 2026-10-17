@@ -42,23 +42,20 @@ jobs:
           $version = node -p "require('./package.json').version"
           $tag = "v$version"
           $api = "repos/$env:GITHUB_REPOSITORY/releases"
-          # A draft does not yet have a public tag URL. Resolve it through the list, then use its numeric ID.
-          function Find-Release {
-            $raw = gh api "$api`?per_page=100"
-            if ($LASTEXITCODE -ne 0) { throw 'Cannot read release list' }
-            $found = @(($raw | ConvertFrom-Json) | Where-Object { $_.tag_name -eq $tag })
-            if ($found.Count -gt 1) { throw 'Ambiguous release tag' }
-            if ($found.Count -eq 1) { return $found[0] }
-            return $null
-          }
-          $release = Find-Release
+          # Draft tags are not resolvable as public releases. Use numeric IDs for every draft operation.
+          $raw = gh api "$api`?per_page=100"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read release list' }
+          $found = @(($raw | ConvertFrom-Json) | Where-Object { $_.tag_name -eq $tag })
+          if ($found.Count -gt 1) { throw 'Ambiguous release tag' }
+          $release = if ($found.Count -eq 1) { $found[0] } else { $null }
           if ($null -ne $release -and -not $release.draft) {
             Write-Host "Release $tag is published: never replace its assets"
             exit 0
           }
           if ($null -ne $release) {
-            # This exact unpublished draft was inspected after a failed publication step; its app build passed all checks.
-            $knownRecovery = $release.id -eq 415803529 -and $tag -eq 'v0.1.10006' -and $release.target_commitish -eq '6ae7d0062b00d9be01a8a8ac20d7f7e7759d761a'
+            # Explicit recovery of this inspected, unpublished draft only. Both previous builds passed tests and feed verification.
+            $recoveryTargets = @('6ae7d0062b00d9be01a8a8ac20d7f7e7759d761a', 'b8acc1e54197591613e9351d8b581b3d693c9820')
+            $knownRecovery = $release.id -eq 415803529 -and $tag -eq 'v0.1.10006' -and $release.target_commitish -in $recoveryTargets
             if ($release.author.login -ne 'github-actions[bot]' -or $release.prerelease -or ($release.target_commitish -ne $env:GITHUB_SHA -and -not $knownRecovery)) {
               throw 'An unrelated draft exists; inspect it before retrying'
             }
@@ -75,17 +72,31 @@ jobs:
             (Join-Path (Get-Location).Path 'SHA256SUMS.txt')
           )
           if ($null -eq $release) {
-            gh release create $tag --draft --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY --title "VERDANT $version" --notes-file CHANGELOG.md
+            $raw = gh api --method POST $api -f tag_name=$tag -f target_commitish=$env:GITHUB_SHA -F draft=true -F prerelease=false -f name="VERDANT $version" -F body=@CHANGELOG.md
             if ($LASTEXITCODE -ne 0) { throw 'Could not create draft' }
-            $release = Find-Release
+            $release = $raw | ConvertFrom-Json
           }
           if ($null -eq $release -or -not $release.draft) { throw 'Draft is not available' }
           $releaseApi = "$api/$($release.id)"
-          # For an explicitly approved recovery, associate newly rebuilt assets with this exact tested commit.
-          gh api --method PATCH $releaseApi -f target_commitish=$env:GITHUB_SHA -F draft=true > $null
-          if ($LASTEXITCODE -ne 0) { throw 'Could not set the checked draft target' }
-          gh release upload $tag --repo $env:GITHUB_REPOSITORY --clobber @assets
-          if ($LASTEXITCODE -ne 0) { throw 'Could not upload complete draft assets' }
+          $raw = gh api --method PATCH $releaseApi -f target_commitish=$env:GITHUB_SHA -F draft=true
+          if ($LASTEXITCODE -ne 0) { throw 'Could not set checked draft target' }
+          $release = $raw | ConvertFrom-Json
+          $uploadBase = $release.upload_url.Split('{')[0]
+          $expectedBase = "https://uploads.github.com/repos/$env:GITHUB_REPOSITORY/releases/$($release.id)/assets"
+          if ($uploadBase -ne $expectedBase) { throw 'Unexpected upload endpoint' }
+          foreach ($file in $assets) {
+            $name = [IO.Path]::GetFileName($file)
+            $oldAssets = @($release.assets | Where-Object { $_.name -eq $name })
+            foreach ($old in $oldAssets) {
+              gh api --method DELETE "$api/assets/$($old.id)"
+              if ($LASTEXITCODE -ne 0) { throw "Cannot replace unpublished asset $name" }
+            }
+            $upload = $uploadBase + '?name=' + [Uri]::EscapeDataString($name)
+            $size = (Get-Item -LiteralPath $file).Length
+            gh api --method POST $upload --input $file -H 'Content-Type: application/octet-stream' -H "Content-Length: $size" --silent
+            if ($LASTEXITCODE -ne 0) { throw "Upload failed: $name" }
+            Write-Host "Uploaded draft asset: $name"
+          }
           $raw = gh api $releaseApi
           if ($LASTEXITCODE -ne 0) { throw 'Cannot read draft by numeric ID' }
           $release = $raw | ConvertFrom-Json
@@ -98,7 +109,7 @@ jobs:
             $digest = 'sha256:' + (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
             if ($match.Count -ne 1 -or $match[0].size -ne $size -or $match[0].digest -ne $digest) { throw "Uploaded asset verification failed: $name" }
           }
-          gh api --method PATCH $releaseApi -F draft=false -F prerelease=false -f make_latest=true > $null
+          gh api --method PATCH $releaseApi -F draft=false -F prerelease=false -f make_latest=true --silent
           if ($LASTEXITCODE -ne 0) { throw 'Could not publish verified draft' }
           $raw = gh api $releaseApi
           if ($LASTEXITCODE -ne 0) { throw 'Cannot confirm publication' }
