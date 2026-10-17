@@ -8,7 +8,8 @@ if(process.env.CI!=='true') {
   const path=await import('node:path');
   const fs=await import('node:fs/promises');
   const require=createRequire(import.meta.url);
-  execFileSync(process.execPath,[require.resolve('playwright/cli'),'install','chromium'],{stdio:'inherit',timeout:180000});
+  const cli=path.join(path.dirname(require.resolve('playwright/package.json')),'cli.js');
+  execFileSync(process.execPath,[cli,'install','chromium'],{stdio:'inherit',timeout:180000});
   const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','5197','--strictPort'],{stdio:'pipe',windowsHide:true});
   const base='http://127.0.0.1:5197';
   let browser;
@@ -73,7 +74,6 @@ if(process.env.CI!=='true') {
     await page.locator('.save-dialog button[type="submit"]').click();
     await page.waitForFunction(()=>document.querySelector('#save-chip')?.textContent==='Отдельный снимок');
     await page.keyboard.press('Escape');
-    // Отдельный слот для проверки погружения: текущий мир не перезаписывается.
     await page.evaluate(async()=>{
       const {SaveRepository}=await import('/src/storage/SaveRepository.js');
       const {newWorldState}=await import('/src/storage/SaveSchema.js');
