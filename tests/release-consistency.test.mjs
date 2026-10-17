@@ -5,7 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const read=(rel)=>fs.readFile(path.join(ROOT,rel),'utf8');
+// Normalize Windows CRLF and classic Mac CR to LF before checking metadata.
+const normalizeNewlines=(value)=>value.replace(/\r\n?/g,'\n');
+const read=async (rel)=>normalizeNewlines(await fs.readFile(path.join(ROOT,rel),'utf8'));
 
 /** Защита от ситуации: ZIP имеет версию .10004, а игра пишет .10003. */
 test('Текущая версия совпадает в package.json, манифесте, UI и документации',async()=>{
@@ -32,4 +34,12 @@ test('Манифест перечисляет все свои файлы и не
     assert.doesNotMatch(file,/\.(?:png|jpg|webp|mp3|wav)$/i);
     assert.ok((await fs.stat(path.join(ROOT,file))).isFile(),`В манифесте отсутствующий файл ${file}`);
   }
+});
+
+/** CI on Windows may check out text files as CRLF. */
+test('Проверка версии платформонезависима: LF и CRLF эквивалентны',()=>{
+  const lf='# VERDANT — CHANGELOG\n\n## 0.1.10005 — обновление';
+  const crlf=lf.replaceAll('\n','\r\n');
+  assert.equal(normalizeNewlines(crlf),lf);
+  assert.match(normalizeNewlines(crlf),/^#.*?\n\n## 0\.1\.10005/);
 });

@@ -42,4 +42,16 @@ jobs:
             Write-Host "Release $tag exists: do not overwrite immutable release"
             exit 0
           }
-          gh release create $tag --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY --title "VERDANT $version" --notes-file CHANGELOG.md "dist-release/*.exe" "dist-release/*.blockmap" "dist-release/latest.yml" "VERDANT_v${version}_PROJECT.zip" "VERDANT_v${version}_TEXTURES_1K.zip" "SHA256SUMS.txt"
+          $exeFiles = @(Get-ChildItem -Path dist-release -Filter '*.exe' -File | ForEach-Object { $_.FullName })
+          if ($exeFiles.Count -ne 1) { throw "Expected exactly one Windows installer; found $($exeFiles.Count)" }
+          $latest = Join-Path (Get-Location).Path 'dist-release/latest.yml'
+          if (-not (Test-Path -LiteralPath $latest)) { throw 'electron-builder did not generate latest.yml' }
+          $blockmaps = @(Get-ChildItem -Path dist-release -Filter '*.blockmap' -File | ForEach-Object { $_.FullName })
+          $assets = @($exeFiles) + @($blockmaps) + @(
+            $latest,
+            (Join-Path (Get-Location).Path ("VERDANT_v" + $version + "_PROJECT.zip")),
+            (Join-Path (Get-Location).Path ("VERDANT_v" + $version + "_TEXTURES_1K.zip")),
+            (Join-Path (Get-Location).Path 'SHA256SUMS.txt')
+          )
+          gh release create $tag --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY --title "VERDANT $version" --notes-file CHANGELOG.md @assets
+          if ($LASTEXITCODE -ne 0) { throw "GitHub Release publishing failed: exit code $LASTEXITCODE" }
