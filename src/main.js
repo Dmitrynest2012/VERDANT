@@ -14,11 +14,13 @@ import { WorldMap } from './ui/WorldMap.js';
 import { SaveRepository } from './storage/SaveRepository.js';
 import { newWorldState, RECOVERY_KEY } from './storage/SaveSchema.js';
 import { SavePanel } from './ui/SavePanel.js';
+import { makeGrassMaterial } from './gfx/GrassMaterial.js';
 import { WaterRenderer } from './gfx/WaterRenderer.js';
 import './style.css';
 import './saves.css';
+import './optics.css';
 
-/** VERDANT v0.1.10007 — именованные сохранения, поверхностные озёра, потоковая вода и плавание. */
+/** VERDANT v0.1.10008 — именованные сохранения, поверхностные озёра, потоковая вода и плавание. */
 let saves,savePanel,activeSlot,loadedState,changingSlot=false,saveReturnMode='title',playSeconds=0,waterRenderer;
 let toolsVersion=1;
 const stage=document.getElementById('stage');
@@ -99,9 +101,10 @@ async function loadMaterials() {
       normalMap.minFilter=THREE.LinearMipmapLinearFilter;normalMap.anisotropy=8;
       normalMap.wrapS=normalMap.wrapT=THREE.RepeatWrapping;normalLoaded++;
     }catch(error){console.info(`Нет normal map: ${filename}`,error);}
-    return new THREE.MeshStandardMaterial({map,normalMap,normalMapType:THREE.TangentSpaceNormalMap,
+    const material=new THREE.MeshStandardMaterial({map,normalMap,normalMapType:THREE.TangentSpaceNormalMap,
       normalScale:new THREE.Vector2(1.4,1.4),color:map?'#ffffff':fallbackColors[index],
       roughness:index>=4?.96:index===3?.93:.87,metalness:0,vertexColors:true});
+    return index===0?makeGrassMaterial(material):material;
   }));
   return {materials,missing,normalLoaded};
 }
@@ -348,7 +351,7 @@ async function start() {
     world=new VoxelWorld(scene,materials,saved?.edits,saved.seed,{generatorVersion:saved.generatorVersion,water:saved.water});
     player=new Player(world,camera,saved?.player);worldMap=new WorldMap(document.getElementById('map-canvas'),world);
     world.buildInitial(player.position,graphicSettings.viewDistance);
-    env=new Environment(scene,camera);clouds=new Clouds(scene,camera,env.direction);
+    env=new Environment(scene,camera);env.setWorld(world);clouds=new Clouds(scene,camera,env.direction);
     flashlight=new THREE.SpotLight('#eef4ff',0,24,Math.PI/6,.33,1.35);flashlight.castShadow=false;flashlight.visible=flashlightEnabled;
     flashlightTarget=new THREE.Object3D();scene.add(flashlight,flashlightTarget);flashlight.target=flashlightTarget;
     fx=new Effects(scene);drops=new Drops(scene,world,inventory,saved?.drops);lighting=new Lighting(renderer,scene,camera);

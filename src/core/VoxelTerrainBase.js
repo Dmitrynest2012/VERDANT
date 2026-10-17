@@ -216,7 +216,7 @@ export class VoxelWorld {
     xs.push(endX);
     for(let z=startZ;z<endZ;z+=step)zs.push(z);
     zs.push(endZ);
-    const pos=[],uv=[],colors=[],indices=[];
+    const pos=[],uv=[],colors=[],indices=[],activeCells=new Set();
     const ny=zs.length;
     const addVertex=(x,z,drop=0)=>{
       const sx=Math.floor(Math.min(WORLD_HALF-1,Math.max(-WORLD_HALF,x)));
@@ -234,23 +234,45 @@ export class VoxelWorld {
       const maskRadius=this.nearRadius + step * 1.2;
       if(player&&Math.hypot(mx-player.x,mz-player.z)<maskRadius)continue;
       const a=i*ny+j,b=(i+1)*ny+j,c=a+1,d=b+1;
-      indices.push(a,c,b,b,c,d);
+      indices.push(a,c,b,b,c,d);activeCells.add(`${i},${j}`);
     }
     const skirtDrop=Math.max(22,step*2.2);
-    const addSkirt=(a,b)=>{
-      const a2=addVertex(pos[a*3],pos[a*3+2],skirtDrop);
-      const b2=addVertex(pos[b*3],pos[b*3+2],skirtDrop);
-      indices.push(a,b,b2,a,b2,a2);
+    const addSkirt=(a,b,i,j)=>{
+      // Маска ближней зоны относится ко ВСЕМ треугольникам, включая юбку.
+      // Раньше скрытая верхняя клетка оставляла вертикальную стенку у игрока.
+      if(!activeCells.has(`${i},${j}`))return;
+      const x1=pos[a*3],z1=pos[a*3+2],x2=pos[b*3],z2=pos[b*3+2];
+      const a1=addVertex(x1,z1),b1=addVertex(x2,z2);
+      const b2=addVertex(x2,z2,skirtDrop),a2=addVertex(x1,z1,skirtDrop);
+      // Отдельные вершины и невырожденная UV-развёртка вертикальной полосы.
+      // UV=(x,z) на ней давала нулевой tangent и чёрные треугольники в normal map.
+      const length=Math.hypot(x2-x1,z2-z1);
+      for(const [index,u] of [[a1,0],[b1,length],[b2,length],[a2,0]]) {
+        uv[index*2]=u;uv[index*2+1]=pos[index*3+1];
+      }
+      indices.push(a1,b1,b2,a1,b2,a2);
     };
-    for(let i=0;i<xs.length-1;i++) addSkirt(i*ny,(i+1)*ny);
-    for(let i=0;i<xs.length-1;i++) addSkirt(i*ny+(ny-1),(i+1)*ny+(ny-1));
-    for(let j=0;j<zs.length-1;j++) addSkirt(j,j+1);
-    for(let j=0;j<zs.length-1;j++) addSkirt((xs.length-1)*ny+j,(xs.length-1)*ny+j+1);
+    for(let i=0;i<xs.length-1;i++)addSkirt(i*ny,(i+1)*ny,i,0);
+    for(let i=0;i<xs.length-1;i++)addSkirt(i*ny+ny-1,(i+1)*ny+ny-1,i,ny-2);
+    for(let j=0;j<ny-1;j++)addSkirt(j,j+1,0,j);
+    for(let j=0;j<ny-1;j++)addSkirt((xs.length-1)*ny+j,(xs.length-1)*ny+j+1,xs.length-2,j);
+    // Вырезанная близкая область не занимает GPU-вершины и не оставляет
+    // нулевые нормали/тангенты в буфере: уплотняем только используемые вершины.
+    const remap=new Map(),p2=[],u2=[],c2=[],i2=[];
+    for(const index of indices) {
+      if(!remap.has(index)) {
+        remap.set(index,p2.length/3);
+        p2.push(pos[index*3],pos[index*3+1],pos[index*3+2]);
+        u2.push(uv[index*2],uv[index*2+1]);
+        c2.push(colors[index*3],colors[index*3+1],colors[index*3+2]);
+      }
+      i2.push(remap.get(index));
+    }
     const geo=new THREE.BufferGeometry();
-    geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
-    geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
-    geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
-    geo.setIndex(indices);
+    geo.setAttribute('position',new THREE.Float32BufferAttribute(p2,3));
+    geo.setAttribute('uv',new THREE.Float32BufferAttribute(u2,2));
+    geo.setAttribute('color',new THREE.Float32BufferAttribute(c2,3));
+    geo.setIndex(i2);
     geo.computeVertexNormals();geo.computeTangents();geo.computeBoundingSphere();
     const mesh=new THREE.Mesh(geo,this.lodMaterial);
     mesh.name=`far-lod(${tx},${tz},${step})`;
