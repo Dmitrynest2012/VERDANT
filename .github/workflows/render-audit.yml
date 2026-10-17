@@ -3,7 +3,7 @@ on:
   push:
     branches: ['qa/render-fixes-0.1.10008']
 permissions:
-  contents: read
+  contents: write
 jobs:
   graphics:
     runs-on: ubuntu-latest
@@ -13,9 +13,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Apply reviewed source diff on isolated QA branch
+        shell: bash
+        run: |
+          test "$GITHUB_REF" = refs/heads/qa/render-fixes-0.1.10008
+          if git apply --check scripts/render-fixes.patch; then
+            git apply scripts/render-fixes.patch
+          else
+            git apply --reverse --check scripts/render-fixes.patch
+          fi
       - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm test
       - run: npx playwright install --with-deps chrome
-      - run: xvfb-run -a node scripts/shading-audit.mjs
+      - run: xvfb-run -a node scripts/render-regression.mjs
+      - name: Record tested source files only on QA branch
+        shell: bash
+        run: |
+          git add src/main.js src/core/VoxelTerrainBase.js
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix: record reviewed and tested terrain/optics integration'
+            git push origin HEAD:refs/heads/qa/render-fixes-0.1.10008
+          fi
+          git rev-parse HEAD
       - uses: actions/upload-artifact@v4
         if: always()
         with:

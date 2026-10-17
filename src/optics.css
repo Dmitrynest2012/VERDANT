@@ -1,0 +1,9 @@
+/* Единственное основное ослабление — opacity из SunOptics.js.
+   Не умножать его на ещё одну почти нулевую альфу внутри градиента. */
+#sun-fx{position:fixed;inset:0;pointer-events:none;z-index:4;overflow:hidden;}
+#sun-fx .sun-flare{position:absolute;border-radius:50%;filter:blur(.55px);mix-blend-mode:screen;will-change:transform,opacity;}
+#sun-fx .flare-1{background:radial-gradient(circle,rgba(255,225,149,.92) 0%,rgba(255,207,131,.56) 19%,rgba(255,183,116,.10) 49%,rgba(255,193,134,.48) 54%,rgba(255,185,123,0) 66%);}
+#sun-fx .flare-2{background:radial-gradient(circle,rgba(154,221,255,.86) 0%,rgba(137,209,248,.28) 35%,rgba(114,211,245,.06) 48%,rgba(118,216,255,.38) 55%,rgba(133,221,255,0) 67%);}
+#sun-fx .flare-3{background:radial-gradient(circle,rgba(244,166,219,.8) 0%,rgba(230,155,225,.20) 35%,rgba(239,135,213,.04) 49%,rgba(234,159,218,.36) 55%,rgba(236,175,232,0) 69%);}
+body.underwater #sun-fx{visibility:hidden;}
+body:not(.playing) #sun-fx .sun-flare,body:not(.playing) #sun-fx .sun-bloom{visibility:hidden;}

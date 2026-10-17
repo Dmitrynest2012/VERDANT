@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
-import { uniform, attribute, positionLocal, positionWorld, normalView, cameraPosition,
+import { uniform, attribute, positionLocal, positionWorld, normalViewGeometry, cameraPosition,
   cameraViewMatrix, vec2, vec3, vec4, sin, cos, color, mix, smoothstep, screenUV,
   viewportSharedTexture, viewportSafeUV, faceDirection } from 'three/tsl';
-import { emptyWaterGeometry, waterQuad, buildWaterSection } from '../core/WaterGeometry.js';
+import { emptyWaterGeometry, waterQuad, buildWaterSection, waterCorner } from '../core/WaterGeometry.js';
 import { LAKE_CELL_SIZE } from '../core/SurfaceHydrology.js';
 
 /** Общий WebGPU/TSL материал всех водоёмов, а не отдельный отражатель на каждый куб. */
@@ -14,8 +14,8 @@ export class WaterRenderer {
     const info=attribute('waterInfo','vec3'),top=info.z,waveMask=attribute('waveMask','float');
     const phase=positionWorld.x.mul(.73).add(positionWorld.z.mul(.47)).add(this.time.mul(1.1));
     const phase2=positionWorld.x.mul(-1.21).add(positionWorld.z.mul(.82)).sub(this.time.mul(.76));
-    const nx=cos(phase).mul(-.073).add(cos(phase2).mul(.035));
-    const nz=cos(phase).mul(-.047).add(cos(phase2).mul(-.029));
+    const nx=cos(phase).mul(-.01825).add(cos(phase2).mul(.01452));
+    const nz=cos(phase).mul(-.01175).add(cos(phase2).mul(-.00984));
     const wave=vec3(nx,1,nz).normalize();
     const normal=cameraViewMatrix.mul(vec4(wave,0)).xyz;
     const eye=cameraPosition.sub(positionWorld).normalize();
@@ -29,7 +29,7 @@ export class WaterRenderer {
     const p2=positionLocal.x.mul(-1.21).add(positionLocal.z.mul(.82)).sub(this.time.mul(.76));
     const displacement=sin(p1).mul(.025).add(sin(p2).mul(.012)).mul(waveMask).mul(info.y.mul(.75).oneMinus());
     material.positionNode=positionLocal.add(vec3(0,displacement,0));
-    material.normalNode=mix(normalView,normal.mul(faceDirection),top).normalize();
+    material.normalNode=mix(normalViewGeometry.mul(faceDirection),normal.mul(faceDirection),top).normalize();
     material.colorNode=mix(color('#479aac'),color('#124058'),depth).add(vec3(foam));
     // Небо отражается приближённо; отражения объектов за камерой не имитируем.
     material.emissiveNode=color('#a8d7f0').mul(fresnel.mul(.55)).add(vec3(foam.mul(.5))).mul(this.under.mul(.6).oneMinus());
@@ -103,8 +103,9 @@ export class WaterRenderer {
       if(this.nearColumns.has(`${Math.floor((x+.5)/16)},${Math.floor((z+.5)/16)}`))continue;
       const col=this.world.surfaceColumn(x,z);
       if(col.waterY===null || !water.get(x,col.waterY,z))continue;
-      const y=col.waterY+8/9;
-      waterQuad(g,[[x,y,z+step],[x+step,y,z+step],[x+step,y,z],[x,y,z]],[0,1,0],col.waterY-col.height,0,1);
+      const corners=[[x,z+step],[x+step,z+step],[x+step,z],[x,z]];
+      const props=corners.map(([gx,gz])=>waterCorner(this.world,gx,col.waterY,gz));
+      waterQuad(g,corners.map(([gx,gz],i)=>[gx,col.waterY+props[i].height,gz]),[0,1,0],props.map(p=>p.depth),props.map(p=>p.shore),1);
     }
     return g;
   }
