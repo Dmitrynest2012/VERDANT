@@ -3,13 +3,14 @@ import {spawn} from 'node:child_process';
 import fs from 'node:fs/promises';
 const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','5198','--strictPort'],{stdio:'pipe'});
 server.stdout.on('data',()=>{});server.stderr.on('data',b=>console.log(String(b).slice(0,500)));
-const base='http://127.0.0.1:5198';let browser;
+const base='http://127.0.0.1:5198';let browser;const errors=[];
 await fs.mkdir('qa-results',{recursive:true});
 try {
  for(let i=0;i<100;i++){try{if((await fetch(base)).ok)break;}catch{}await new Promise(r=>setTimeout(r,200));}
- browser=await chromium.launch({headless:false,args:['--no-sandbox','--enable-unsafe-webgpu','--use-webgpu-adapter=swiftshader','--use-angle=vulkan','--use-vulkan=swiftshader','--enable-features=Vulkan','--disable-vulkan-surface','--enable-dawn-features=allow_unsafe_apis']});
+ browser=await chromium.launch({channel:'chrome',headless:false,args:['--no-sandbox','--enable-unsafe-webgpu','--use-webgpu-adapter=swiftshader','--use-angle=vulkan','--use-vulkan=swiftshader','--enable-features=Vulkan','--disable-vulkan-surface','--enable-dawn-features=allow_unsafe_apis']});
+ console.log('BROWSER',browser.version());
  const page=await browser.newPage({viewport:{width:960,height:640}});
- const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text().slice(0,1000));});
+ page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text().slice(0,1000));});
  await page.route('**/src/main.js',async route=>{
   const response=await route.fetch();let s=await response.text();
   const target='renderer.setAnimationLoop(tick);';
@@ -41,5 +42,5 @@ try {
   return {maxEdgeAlpha:max,nonzeroEdgePixels:count,data:canvas.toDataURL()};
  });
  await fs.writeFile('qa-results/cloud-alpha.png',Buffer.from(cloud.data.split(',')[1],'base64'));delete cloud.data;console.log('CLOUD',JSON.stringify(cloud));
- await fs.writeFile('qa-results/errors.json',JSON.stringify(errors,null,2));console.log('ERRORS',JSON.stringify(errors));
-}finally{await browser?.close();server.kill();}
+ console.log('ERRORS',JSON.stringify(errors));
+}finally{await fs.writeFile('qa-results/errors.json',JSON.stringify(errors,null,2));await browser?.close();server.kill();}
