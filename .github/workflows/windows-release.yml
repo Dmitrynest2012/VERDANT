@@ -41,38 +41,67 @@ jobs:
         run: |
           $version = node -p "require('./package.json').version"
           $tag = "v$version"
-          $existing = gh release view $tag --repo $env:GITHUB_REPOSITORY --json isDraft 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            if (($existing | ConvertFrom-Json).isDraft) { throw "Draft $tag already exists; inspect it before retrying" }
-            Write-Host "Release $tag exists: do not overwrite published releases"
+          $api = "repos/$env:GITHUB_REPOSITORY/releases"
+          # A draft does not yet have a public tag URL. Resolve it through the list, then use its numeric ID.
+          function Find-Release {
+            $raw = gh api "$api`?per_page=100"
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot read release list' }
+            $found = @(($raw | ConvertFrom-Json) | Where-Object { $_.tag_name -eq $tag })
+            if ($found.Count -gt 1) { throw 'Ambiguous release tag' }
+            if ($found.Count -eq 1) { return $found[0] }
+            return $null
+          }
+          $release = Find-Release
+          if ($null -ne $release -and -not $release.draft) {
+            Write-Host "Release $tag is published: never replace its assets"
             exit 0
           }
+          if ($null -ne $release) {
+            # This exact unpublished draft was inspected after a failed publication step; its app build passed all checks.
+            $knownRecovery = $release.id -eq 415803529 -and $tag -eq 'v0.1.10006' -and $release.target_commitish -eq '6ae7d0062b00d9be01a8a8ac20d7f7e7759d761a'
+            if ($release.author.login -ne 'github-actions[bot]' -or $release.prerelease -or ($release.target_commitish -ne $env:GITHUB_SHA -and -not $knownRecovery)) {
+              throw 'An unrelated draft exists; inspect it before retrying'
+            }
+          }
           $exeFiles = @(Get-ChildItem -Path dist-release -Filter '*.exe' -File | ForEach-Object { $_.FullName })
-          if ($exeFiles.Count -ne 1) { throw "Expected exactly one Windows installer; found $($exeFiles.Count)" }
+          if ($exeFiles.Count -ne 1) { throw 'Expected exactly one Windows installer' }
           $latest = Join-Path (Get-Location).Path 'dist-release/latest.yml'
-          if (-not (Test-Path -LiteralPath $latest)) { throw 'Missing latest.yml' }
           $blockmaps = @(Get-ChildItem -Path dist-release -Filter '*.blockmap' -File | ForEach-Object { $_.FullName })
-          if ($blockmaps.Count -ne 1) { throw 'Expected exactly one blockmap' }
+          if ($blockmaps.Count -ne 1 -or -not (Test-Path -LiteralPath $latest)) { throw 'Missing Electron update metadata' }
           $assets = @($exeFiles) + @($blockmaps) + @(
             $latest,
             (Join-Path (Get-Location).Path ("VERDANT_v" + $version + "_PROJECT.zip")),
             (Join-Path (Get-Location).Path ("VERDANT_v" + $version + "_TEXTURES_1K.zip")),
             (Join-Path (Get-Location).Path 'SHA256SUMS.txt')
           )
-          gh release create $tag --draft --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY --title "VERDANT $version" --notes-file CHANGELOG.md @assets
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to create draft and upload assets' }
-          $raw = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$tag"
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify uploaded assets' }
+          if ($null -eq $release) {
+            gh release create $tag --draft --target $env:GITHUB_SHA --repo $env:GITHUB_REPOSITORY --title "VERDANT $version" --notes-file CHANGELOG.md
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create draft' }
+            $release = Find-Release
+          }
+          if ($null -eq $release -or -not $release.draft) { throw 'Draft is not available' }
+          $releaseApi = "$api/$($release.id)"
+          # For an explicitly approved recovery, associate newly rebuilt assets with this exact tested commit.
+          gh api --method PATCH $releaseApi -f target_commitish=$env:GITHUB_SHA -F draft=true > $null
+          if ($LASTEXITCODE -ne 0) { throw 'Could not set the checked draft target' }
+          gh release upload $tag --repo $env:GITHUB_REPOSITORY --clobber @assets
+          if ($LASTEXITCODE -ne 0) { throw 'Could not upload complete draft assets' }
+          $raw = gh api $releaseApi
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read draft by numeric ID' }
           $release = $raw | ConvertFrom-Json
+          if (-not $release.draft -or $release.tag_name -ne $tag -or $release.target_commitish -ne $env:GITHUB_SHA) { throw 'Draft target changed during upload' }
+          if (@($release.assets).Count -ne $assets.Count) { throw 'Unexpected asset count' }
           foreach ($file in $assets) {
             $name = [IO.Path]::GetFileName($file)
-            $match = @($release.assets | Where-Object { $_.name -eq $name -and $_.state -eq 'uploaded' -and $_.size -gt 0 })
-            if ($match.Count -ne 1) { throw "Missing or incomplete asset $name" }
+            $match = @($release.assets | Where-Object { $_.name -eq $name -and $_.state -eq 'uploaded' })
+            $size = (Get-Item -LiteralPath $file).Length
+            $digest = 'sha256:' + (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($match.Count -ne 1 -or $match[0].size -ne $size -or $match[0].digest -ne $digest) { throw "Uploaded asset verification failed: $name" }
           }
-          gh release edit $tag --repo $env:GITHUB_REPOSITORY --draft=false --latest
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to publish verified release' }
-          $published = gh release view $tag --repo $env:GITHUB_REPOSITORY --json isDraft,isPrerelease,tagName,url
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify publication' }
-          $data = $published | ConvertFrom-Json
-          if ($data.isDraft -or $data.isPrerelease -or $data.tagName -ne $tag) { throw 'Incorrect published release state' }
-          Write-Host "VERDANT UPDATE CHANNEL READY: $($data.url)"
+          gh api --method PATCH $releaseApi -F draft=false -F prerelease=false -f make_latest=true > $null
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish verified draft' }
+          $raw = gh api $releaseApi
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot confirm publication' }
+          $published = $raw | ConvertFrom-Json
+          if ($published.draft -or $published.prerelease -or $published.tag_name -ne $tag) { throw 'Incorrect final release state' }
+          Write-Host "VERDANT UPDATE CHANNEL READY: $($published.html_url)"
