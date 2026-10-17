@@ -15,7 +15,7 @@ jobs:
           node-version: '22'
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chrome
-      - run: xvfb-run -a node scripts/render-audit.mjs
+      - run: xvfb-run -a node scripts/shading-audit.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
