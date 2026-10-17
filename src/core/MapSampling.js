@@ -34,6 +34,11 @@ export function sampleMapPixel(world, x, z, scale = 1) {
   const bx = Math.floor(x), bz = Math.floor(z);
   const y = world.highestSolid(bx, bz);
   if (y < MIN_WORLD_Y) return [25, 53, 63, 255];
+  const waterTop=world.water?.surface(bx,bz,y);
+  if(waterTop!=null) {
+    const depth=Math.min(10,Math.max(.2,waterTop-y-1));
+    return [Math.round(58-depth*2),Math.round(151-depth*6),Math.round(182-depth*5),255];
+  }
   const block = world.getBlock(bx, y, bz);
   const palette = MATERIAL_PALETTE[block] || MATERIAL_PALETTE[BLOCK.DIRT];
   const west = world.heightSeed(Math.max(-1000, bx - 1), bz);
@@ -45,10 +50,5 @@ export function sampleMapPixel(world, x, z, scale = 1) {
   const detail = (fract(Math.sin(bx * 32.117 + bz * 57.43) * 43758.5453) - 0.5) * 0.14;
   const excavation = y < world.heightSeed(bx, bz) ? -0.22 : 0;
   const shade = Math.max(0.43, Math.min(1.34, 1 + slope + elevation + detail + excavation));
-  return [
-    clampByte(palette[0] * shade),
-    clampByte(palette[1] * shade),
-    clampByte(palette[2] * shade),
-    255
-  ];
+  return [clampByte(palette[0] * shade),clampByte(palette[1] * shade),clampByte(palette[2] * shade),255];
 }

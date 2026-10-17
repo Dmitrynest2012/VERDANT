@@ -1,131 +1,65 @@
 <!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#6ca7dd" />
-    <meta name="description" content="Verdant — расслабляющая воксельная песочница с WebGPU" />
-    <title>VERDANT — Воксельная песочница</title>
-    <link rel="stylesheet" href="/src/drill.css" />
-  </head>
-  <body>
-    <div id="app">
-      <div id="stage" aria-label="Трехмерный мир"></div>
-
-      <div id="hud" class="hidden">
-        <div class="hud-top">
-          <div class="brand-chip"><span class="brand-symbol">✦</span><span>VERDANT</span><span class="alpha-mark">ALPHA 0.1.10006</span></div>
-          <div class="world-stats"><span id="fps">-- FPS</span><span id="stream-stats" title="Воксельные секции / LOD-плитки / очередь загрузки">Загрузка…</span><span id="backend">GPU…</span><span id="normals-status">Нормали …</span></div>
-        </div>
-        <aside class="nav-widget" aria-label="Навигация по миру">
-          <div class="nav-head"><span>⌖ НАВИГАЦИЯ</span><span>МИР / МЕТРЫ</span></div>
-          <div class="nav-coords"><div><small>X / ВОСТОК</small><strong id="nav-x">+0.0</strong></div><div><small>Z / СЕВЕР</small><strong id="nav-z">+0.0</strong></div></div>
-          <div class="nav-altitude"><span>ВЫСОТА Y</span><strong id="nav-y">+0.0 м</strong></div>
-          <div class="altitude-track" aria-label="От -1000 до +50 метров"><div id="altitude-bar" class="altitude-bar"></div><div id="altitude-marker" class="altitude-marker"></div></div>
-          <div class="nav-limits"><span>−1000 м</span><span>0 м</span><span>+50 м</span></div>
-        </aside>
-        <div id="crosshair" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-        <div id="target-label" class="hidden">Зелёная земля</div>
-        <div id="mining-progress" class="hidden"><div id="mining-fill"></div></div>
-        <div class="hud-bottom">
-          <div class="selected-title"><span id="selected-label">Переносной бур</span><span id="action-hint">ЛКМ — добыть · ПКМ — поставить</span></div>
-          <div id="hotbar" class="hotbar" aria-label="Быстрые слоты"></div>
-          <div class="bottom-tips">WASD — двигаться <span>·</span> Shift — бег <span>·</span> Пробел — прыжок <span>·</span> E — инвентарь <span>·</span> F — фонарь <span>·</span> M — карта <span>·</span> N — музыка</div>
-        </div>
-        <div id="pickaxe" class="pickaxe" aria-hidden="true"><div class="drill-body"><div class="drill-top"></div><div class="drill-panel"></div><div class="drill-grip"></div><div class="drill-chuck"></div><div class="drill-bit"><span></span><span></span><span></span></div></div></div>
-      </div>
-
-      <div id="map-screen" class="overlay map-screen hidden" aria-label="Топографическая карта мира">
-        <section class="map-panel" role="dialog" aria-label="Карта местности">
-          <header class="map-head">
-            <div><div class="panel-eyebrow">НАВИГАЦИЯ / VERDANT</div><h2 id="map-heading">КАРТА · 200 М</h2></div>
-            <button id="map-close" class="close-button" type="button" aria-label="Закрыть карту">×</button>
-          </header>
-          <div class="map-canvas-frame"><canvas id="map-canvas" width="384" height="384" aria-label="Пиксельная карта высот"></canvas></div>
-          <div class="map-status"><span id="map-location">X 0.0 · Z 0.0 · Y 0.0 м</span><span id="map-range">Охват 200 × 200 м</span></div>
-          <div class="map-levels" aria-label="Масштаб карты">
-            <button type="button" data-map-level="0" class="active">200 м</button>
-            <button type="button" data-map-level="1">400 м</button>
-            <button type="button" data-map-level="2">800 м</button>
-            <button type="button" data-map-level="3">1,6 км</button>
-          </div>
-          <div class="map-controls"><button id="map-zoom-in" type="button">− приблизить</button><span>Колесо мыши — масштаб · M или Esc — закрыть</span><button id="map-zoom-out" type="button">+ отдалить</button></div>
-        </section>
-      </div>
-
-      <div id="title-screen" class="overlay">
-        <div class="cover-left">
-          <div class="eyebrow">ТВОЙ МИР. ТВОЙ ТЕМП.</div>
-          <div class="title-brand"><span class="title-icon">✦</span> VERDANT</div>
-          <p class="title-tag">Два километра — для больших идей.</p>
-          <p class="title-blurb">Лазурное небо, тёплое солнце и бескрайний простор для первого шага. Создавай, исследуй, отдыхай.</p>
-          <div class="title-actions">
-            <button id="start-btn" class="primary-btn">Войти в мир <span>→</span></button>
-            <button id="new-btn" class="secondary-btn hidden">Начать заново</button>
-          </div>
-          <div class="cover-note">WebGPU · Облака 2.0 · Переносной бур · Фонарик · Автосохранение</div>
-        </div>
-        <div class="cover-bottom"><span>EARLY BUILD · 0.1.10006</span><span>Нажми «Войти в мир», чтобы захватить курсор</span></div>
-      </div>
-
-      <div id="pause-screen" class="overlay hidden">
-        <div class="panel pause-panel">
-          <div class="panel-eyebrow">ПАУЗА</div>
-          <h1>Мир подождёт.</h1>
-          <p>Исследование продолжится там, где ты остановился.</p>
-          <button id="resume-btn" class="primary-btn full-btn">Продолжить <span>→</span></button>
-          <button id="inventory-from-pause" class="secondary-btn full-btn">Открыть инвентарь <span>E</span></button>
-          <div class="setting-group">
-            <label for="music-volume">Громкость музыки <span id="music-value">30%</span></label>
-            <input id="music-volume" type="range" min="0" max="100" step="5" value="30" />
-            <button id="music-btn" class="text-button">♫ Включить музыку</button>
-            <p class="fineprint music-status" id="music-status">Проверка файла public/audio/relax.mp3…</p>
-          </div>
-          <div class="graphics-settings">
-            <div class="graphics-heading"><h2>ГРАФИКА</h2><span>WebGPU / ВИДЕОКАРТА</span></div>
-            <div class="setting-row"><label for="graphics-preset">Профиль качества</label><select id="graphics-preset"><option value="low">Низкий</option><option value="medium">Средний</option><option value="high" selected>Высокий</option><option value="ultra">Ультра</option><option value="custom">Свой</option></select></div>
-            <div class="setting-row"><label for="graphics-shadows">Качество теней</label><select id="graphics-shadows" data-graphic="shadows"><option value="off">Выкл.</option><option value="low">1024</option><option value="medium">2048</option><option value="high">3072</option><option value="ultra">4096</option></select></div>
-            <div class="setting-row"><label for="graphics-clouds">Облачность</label><select id="graphics-clouds" data-graphic="clouds"><option value="off">Выкл.</option><option value="low">Эконом</option><option value="medium">Средняя</option><option value="high">Высокая</option><option value="ultra">Ультра</option></select></div>
-            <label class="range-line" for="graphics-resolution">Масштаб разрешения <output id="value-resolution">100%</output></label>
-            <input id="graphics-resolution" data-graphic="resolution" type="range" min="0.55" max="1.5" step="0.05" />
-            <label class="range-line" for="graphics-distance">Дальность прорисовки <output id="value-viewDistance">200 м</output></label>
-            <input id="graphics-distance" data-graphic="viewDistance" type="range" min="50" max="1000" step="10" />
-            <label class="range-line" for="graphics-fog">Синяя даль / дымка <output id="value-fog">50%</output></label>
-            <input id="graphics-fog" data-graphic="fog" type="range" min="0" max="100" step="5" />
-            <label class="range-line" for="graphics-normal">Рельеф нормалей <output id="value-normalStrength">140%</output></label>
-            <input id="graphics-normal" data-graphic="normalStrength" type="range" min="0" max="2.5" step="0.1" />
-            <label class="range-line" for="graphics-exposure">Экспозиция / яркость <output id="value-exposure">1.05</output></label>
-            <input id="graphics-exposure" data-graphic="exposure" type="range" min="0.65" max="1.45" step="0.05" />
-            <label class="range-line" for="graphics-fov">Угол обзора <output id="value-fov">78°</output></label>
-            <input id="graphics-fov" data-graphic="fov" type="range" min="65" max="100" step="1" />
-            <label class="range-line" for="graphics-cloudSpeed">Скорость облаков <output id="value-cloudSpeed">1.0×</output></label>
-            <input id="graphics-cloudSpeed" data-graphic="cloudSpeed" type="range" min="0" max="3" step="0.1" />
-            <label class="checkline"><input id="gi-toggle" type="checkbox" checked /> Экранный непрямой свет (SSGI, WebGPU)</label>
-            <p class="fineprint" id="gi-status">Выбирается после инициализации графики.</p>
-            <p class="fineprint">Дальность 1000 м повышает затраты на GPU и память. Для тестов FPS выбирайте 200 м или меньше; вблизи используются воксели, на расстоянии — LOD.</p>
-            <p class="fineprint">Глубокие тоннели затемняются также через воксельную видимость неба; SSGI — дополнительный экранный эффект.</p>
-          </div>
-          <button id="save-btn" class="text-button">Сохранить мир сейчас</button>
-          <div class="pause-footer">Esc — закрыть меню · E — инвентарь</div>
-        </div>
-      </div>
-
-      <div id="inventory-screen" class="overlay hidden">
-        <div class="panel inventory-panel">
-          <div class="inv-header"><div><div class="panel-eyebrow">МОИ ВЕЩИ</div><h1>Инвентарь</h1></div><button id="inventory-close" class="close-button" aria-label="Закрыть инвентарь">×</button></div>
-          <div class="inv-caption"><span>Рюкзак</span><span>27 ячеек</span></div>
-          <div id="backpack-grid" class="inventory-grid"></div>
-          <div class="inv-divider"></div>
-          <div class="inv-caption"><span>Быстрый доступ</span><span>1 — 9</span></div>
-          <div id="inventory-hotbar" class="inventory-grid"></div>
-          <div class="inventory-help"><strong>ЛКМ</strong> — взять / переместить · <strong>ПКМ</strong> — разделить / положить 1 · <strong>Shift + ЛКМ</strong> — быстро перенести · <strong>Esc / E</strong> — выйти</div>
-          <div id="held-stack" class="held-stack hidden"></div>
-        </div>
-      </div>
-
-      <div id="toast" class="toast hidden" role="status"></div>
-      <div id="fatal-screen" class="overlay hidden"><div class="panel fatal-panel"><h1>Не удалось запустить графику</h1><p id="fatal-detail"></p><button class="primary-btn" onclick="location.reload()">Повторить запуск</button></div></div>
-    </div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
-</html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="theme-color" content="#6ca7dd"><meta name="description" content="Verdant — расслабляющая воксельная песочница с WebGPU"><title>VERDANT — Воксельная песочница</title></head>
+<body><div id="app">
+<div id="stage" aria-label="Трехмерный мир"></div>
+<div id="hud" class="hidden">
+  <div class="hud-top"><div class="brand-chip"><span class="brand-symbol">✦</span><span>VERDANT</span><span class="alpha-mark">ALPHA 0.1.10007</span><span id="save-chip"></span></div><div class="world-stats"><span id="fps">-- FPS</span><span id="stream-stats" title="Воксельные секции / LOD-плитки / очередь загрузки">Загрузка…</span><span id="backend">GPU…</span><span id="normals-status">Нормали …</span></div></div>
+  <aside class="nav-widget" aria-label="Навигация по миру">
+    <div class="nav-head"><span>⌖ НАВИГАЦИЯ</span><span>МИР / МЕТРЫ</span></div>
+    <div class="nav-coords"><div><small>X / ВОСТОК</small><strong id="nav-x">+0.0</strong></div><div><small>Z / СЕВЕР</small><strong id="nav-z">+0.0</strong></div></div>
+    <div class="nav-altitude"><span>ВЫСОТА Y</span><strong id="nav-y">+0.0 м</strong></div>
+    <div class="altitude-track" aria-label="От -1000 до +50 метров"><div id="altitude-bar" class="altitude-bar"></div><div id="altitude-marker" class="altitude-marker"></div></div>
+    <div class="nav-limits"><span>−1000 м</span><span>0 м</span><span>+50 м</span></div>
+  </aside>
+  <div id="crosshair" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div id="swim-status" class="hidden"></div>
+  <div id="target-label" class="hidden">Зелёная земля</div><div id="mining-progress" class="hidden"><div id="mining-fill"></div></div>
+  <div class="hud-bottom"><div class="selected-title"><span id="selected-label">Переносной бур</span><span id="action-hint">ЛКМ — добыть · ПКМ — поставить</span></div><div id="hotbar" class="hotbar" aria-label="Быстрые слоты"></div><div class="bottom-tips">WASD — движение <span>·</span> Shift — бег <span>·</span> Пробел — прыжок <span>·</span> E — инвентарь <span>·</span> F — фонарь <span>·</span> M — карта <span>·</span> N — музыка <span>·</span> F8 — слоты</div></div>
+  <div id="pickaxe" class="pickaxe" aria-hidden="true"><div class="drill-body"><div class="drill-top"></div><div class="drill-panel"></div><div class="drill-grip"></div><div class="drill-chuck"></div><div class="drill-bit"><span></span><span></span><span></span></div></div></div>
+</div>
+<div id="map-screen" class="overlay map-screen hidden" aria-label="Топографическая карта мира"><section class="map-panel" role="dialog" aria-label="Карта местности">
+  <header class="map-head"><div><div class="panel-eyebrow">НАВИГАЦИЯ / VERDANT</div><h2 id="map-heading">КАРТА · 200 М</h2></div><button id="map-close" class="close-button" type="button" aria-label="Закрыть карту">×</button></header>
+  <div class="map-canvas-frame"><canvas id="map-canvas" width="384" height="384" aria-label="Пиксельная карта высот"></canvas></div>
+  <div class="map-status"><span id="map-location">X 0.0 · Z 0.0 · Y 0.0 м</span><span id="map-range">Охват 200 × 200 м</span></div>
+  <div class="map-levels" aria-label="Масштаб карты"><button type="button" data-map-level="0" class="active">200 м</button><button type="button" data-map-level="1">400 м</button><button type="button" data-map-level="2">800 м</button><button type="button" data-map-level="3">1,6 км</button></div>
+  <div class="map-controls"><button id="map-zoom-in" type="button">− приблизить</button><span>Колесо мыши — масштаб · M или Esc — закрыть</span><button id="map-zoom-out" type="button">+ отдалить</button></div>
+</section></div>
+<div id="title-screen" class="overlay"><div class="cover-left">
+  <div class="eyebrow">ТВОЙ МИР. ТВОЙ ТЕМП.</div><div class="title-brand"><span class="title-icon">✦</span> VERDANT</div>
+  <p class="title-tag">Два километра — для больших идей.</p><p class="title-blurb">Лазурное небо, тёплое солнце и бескрайний простор для первого шага. Создавай, исследуй, отдыхай.</p>
+  <div class="title-actions"><button id="start-btn" class="primary-btn">Войти в мир <span>→</span></button><button id="new-btn" class="secondary-btn">Новый мир</button><button id="saves-title-btn" class="secondary-btn">Сохранения</button></div>
+  <div class="cover-note">WebGPU · Озёра и плавание · Именованные сохранения · Фонарик</div>
+</div><div class="cover-bottom"><span>EARLY BUILD · 0.1.10007</span><span>Нажми «Войти в мир», чтобы захватить курсор</span></div></div>
+<div id="pause-screen" class="overlay hidden"><div class="panel pause-panel">
+  <div class="panel-eyebrow">ПАУЗА</div><h1>Мир подождёт.</h1><p>Исследование продолжится там, где ты остановился.</p>
+  <button id="resume-btn" class="primary-btn full-btn">Продолжить <span>→</span></button>
+  <button id="inventory-from-pause" class="secondary-btn full-btn">Открыть инвентарь <span>E</span></button>
+  <button id="saves-pause-btn" class="secondary-btn full-btn">Сохранения и загрузка <span>F8</span></button>
+  <button id="new-pause-btn" class="secondary-btn full-btn">Новый мир в отдельном слоте</button>
+  <div class="setting-group"><label for="music-volume">Громкость музыки <span id="music-value">30%</span></label><input id="music-volume" type="range" min="0" max="100" step="5" value="30"><button id="music-btn" class="text-button">♫ Включить музыку</button><p class="fineprint music-status" id="music-status">Проверка файла public/audio/relax.mp3…</p></div>
+  <div class="graphics-settings"><div class="graphics-heading"><h2>ГРАФИКА</h2><span>WebGPU / ВИДЕОКАРТА</span></div>
+    <div class="setting-row"><label for="graphics-preset">Профиль качества</label><select id="graphics-preset"><option value="low">Низкий</option><option value="medium">Средний</option><option value="high" selected>Высокий</option><option value="ultra">Ультра</option><option value="custom">Свой</option></select></div>
+    <div class="setting-row"><label for="graphics-shadows">Качество теней</label><select id="graphics-shadows" data-graphic="shadows"><option value="off">Выкл.</option><option value="low">1024</option><option value="medium">2048</option><option value="high">3072</option><option value="ultra">4096</option></select></div>
+    <div class="setting-row"><label for="graphics-clouds">Облачность</label><select id="graphics-clouds" data-graphic="clouds"><option value="off">Выкл.</option><option value="low">Эконом</option><option value="medium">Средняя</option><option value="high">Высокая</option><option value="ultra">Ультра</option></select></div>
+    <div class="setting-row"><label for="graphics-water">Графика воды</label><select id="graphics-water" data-graphic="waterQuality"><option value="low">Без преломления</option><option value="high">Высокая · преломление</option></select></div>
+    <label class="range-line" for="graphics-resolution">Масштаб разрешения <output id="value-resolution">100%</output></label><input id="graphics-resolution" data-graphic="resolution" type="range" min="0.55" max="1.5" step="0.05">
+    <label class="range-line" for="graphics-distance">Дальность прорисовки <output id="value-viewDistance">200 м</output></label><input id="graphics-distance" data-graphic="viewDistance" type="range" min="50" max="1000" step="10">
+    <label class="range-line" for="graphics-fog">Синяя даль / дымка <output id="value-fog">50%</output></label><input id="graphics-fog" data-graphic="fog" type="range" min="0" max="100" step="5">
+    <label class="range-line" for="graphics-normal">Рельеф нормалей <output id="value-normalStrength">140%</output></label><input id="graphics-normal" data-graphic="normalStrength" type="range" min="0" max="2.5" step="0.1">
+    <label class="range-line" for="graphics-exposure">Экспозиция / яркость <output id="value-exposure">1.05</output></label><input id="graphics-exposure" data-graphic="exposure" type="range" min="0.65" max="1.45" step="0.05">
+    <label class="range-line" for="graphics-fov">Угол обзора <output id="value-fov">78°</output></label><input id="graphics-fov" data-graphic="fov" type="range" min="65" max="100" step="1">
+    <label class="range-line" for="graphics-cloudSpeed">Скорость облаков <output id="value-cloudSpeed">1.0×</output></label><input id="graphics-cloudSpeed" data-graphic="cloudSpeed" type="range" min="0" max="3" step="0.1">
+    <label class="checkline"><input id="gi-toggle" type="checkbox" checked> Экранный непрямой свет (SSGI, WebGPU)</label><p class="fineprint" id="gi-status">Выбирается после инициализации графики.</p>
+    <p class="fineprint">Дальность 1000 м повышает затраты на GPU и память. Вблизи используются воксели, на расстоянии — LOD.</p>
+    <p class="fineprint">Глубокие тоннели затемняются также через воксельную видимость неба; SSGI — дополнительный экранный эффект.</p>
+  </div><button id="save-btn" class="text-button">Сохранить мир сейчас · F5</button><div class="pause-footer">Esc — управление · E — инвентарь · F8 — слоты</div>
+</div></div>
+<div id="inventory-screen" class="overlay hidden"><div class="panel inventory-panel">
+  <div class="inv-header"><div><div class="panel-eyebrow">МОИ ВЕЩИ</div><h1>Инвентарь</h1></div><button id="inventory-close" class="close-button" aria-label="Закрыть инвентарь">×</button></div>
+  <div class="inv-caption"><span>Рюкзак</span><span>27 ячеек</span></div><div id="backpack-grid" class="inventory-grid"></div><div class="inv-divider"></div>
+  <div class="inv-caption"><span>Быстрый доступ</span><span>1 — 9</span></div><div id="inventory-hotbar" class="inventory-grid"></div>
+  <div class="inventory-help"><strong>ЛКМ</strong> — взять / переместить · <strong>ПКМ</strong> — разделить / положить 1 · <strong>Shift + ЛКМ</strong> — быстро перенести · <strong>Esc / E</strong> — выйти</div><div id="held-stack" class="held-stack hidden"></div>
+</div></div>
+<div id="toast" class="toast hidden" role="status"></div>
+<div id="fatal-screen" class="overlay hidden"><div class="panel fatal-panel"><h1>Не удалось запустить игру</h1><p id="fatal-detail"></p><button class="primary-btn" onclick="location.reload()">Повторить запуск</button></div></div>
+</div><script type="module" src="/src/main.js"></script></body></html>

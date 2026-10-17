@@ -5,19 +5,11 @@ export const GRAPHICS_PRESETS = Object.freeze({
   high:   {resolution:1.00,shadows:'high',clouds:'high',viewDistance:200,fog:50,normalStrength:1.40,exposure:1.05,ssgi:true},
   ultra:  {resolution:1.25,shadows:'ultra',clouds:'ultra',viewDistance:350,fog:50,normalStrength:1.70,exposure:1.02,ssgi:true}
 });
-
-export const GRAPHICS_DEFAULTS = Object.freeze({
-  ...GRAPHICS_PRESETS.high,
-  preset:'high', fov:78, cloudSpeed:1
-});
-
+export const GRAPHICS_DEFAULTS = Object.freeze({ ...GRAPHICS_PRESETS.high,preset:'high', fov:78, cloudSpeed:1, waterQuality:'high' });
 const SHADOW_OPTIONS=['off','low','medium','high','ultra'];
 const CLOUD_OPTIONS=['off','low','medium','high','ultra'];
 const clamp=(n,low,high,fallback)=>Number.isFinite(Number(n))?Math.min(high,Math.max(low,Number(n))):fallback;
-
-/** Прежние сохранения сохраняются, но старая дальность 25–160 м поднимается до 200 м
- * только при миграции из старой схемы — пользовательскую настройку v0.1.10002 не трогаем.
- */
+/** Проверка настроек и совместимость со старыми сохранениями. */
 export function sanitizeGraphics(source={}) {
   const s=source && typeof source==='object'?source:{};
   const defaults=GRAPHICS_DEFAULTS;
@@ -32,23 +24,19 @@ export function sanitizeGraphics(source={}) {
     exposure:clamp(s.exposure,0.65,1.45,defaults.exposure),
     fov:Math.round(clamp(s.fov,65,100,defaults.fov)),
     cloudSpeed:clamp(s.cloudSpeed,0,3,defaults.cloudSpeed),
+    waterQuality:['low','high'].includes(s.waterQuality)?s.waterQuality:'high',
     ssgi:typeof s.ssgi==='boolean'?s.ssgi:defaults.ssgi
   };
 }
-
 export function graphicsPreset(name,previous=GRAPHICS_DEFAULTS) {
   if(!Object.hasOwn(GRAPHICS_PRESETS,name)) return sanitizeGraphics(previous);
-  return sanitizeGraphics({...previous,...GRAPHICS_PRESETS[name],preset:name});
+  return sanitizeGraphics({...previous,...GRAPHICS_PRESETS[name],waterQuality:name==='low'?'low':'high',preset:name});
 }
-
 export function graphicsChange(previous,key,value) {
   if(!Object.hasOwn(GRAPHICS_DEFAULTS,key) || key==='preset') return sanitizeGraphics(previous);
   return sanitizeGraphics({...previous,[key]:value,preset:'custom'});
 }
-
-/** Только старый high/ultra сохранял автоматический лимит 100/150 м.
- * Сохраняем осознанно выбранные custom-параметры и выбранный профиль.
- */
+/** Сохраняем осознанно выбранные custom-параметры и выбранный профиль. */
 export function migrateGraphicsSettings(savedGraphics, savedVersion=0) {
   if (!savedGraphics) return sanitizeGraphics(GRAPHICS_DEFAULTS);
   const copy={...savedGraphics};

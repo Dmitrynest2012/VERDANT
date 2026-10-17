@@ -1,0 +1,16 @@
+.save-screen{z-index:35;background:rgba(7,23,28,.85)}
+.save-panel{width:min(930px,95vw);max-height:94vh;overflow-y:auto;position:relative;scrollbar-width:thin;scrollbar-color:#b8dda0 #173e40}
+.save-header{display:flex;justify-content:space-between;align-items:start}.save-header h1{margin:7px 0}
+.save-toolbar,.save-actions,.save-dialog-buttons{display:flex;flex-wrap:wrap;gap:8px;margin:13px 0}
+.save-toolbar .primary-btn,.save-toolbar .secondary-btn{min-height:42px}.save-note{font-size:11px!important;margin:10px 0;color:#c3d8d0}
+.save-list{display:grid;gap:12px;margin-top:20px}.save-card{padding:15px 18px;border:1px solid #c4e4d13a;background:#ffffff07;border-radius:16px}
+.save-card.is-active{border-color:#d6f3a8;box-shadow:inset 3px 0 #d6f3a8}.save-card h3{margin:0;font-size:17px;overflow-wrap:anywhere}.save-meta{font-size:11px!important;margin:5px 0;color:#b9d1cc!important}
+.save-actions{margin:10px 0 0}.save-actions button{min-height:32px;padding:6px 12px;font-size:11px;border-radius:8px}.save-actions button:disabled{opacity:.3}
+#save-status{color:#e8e7aa;min-height:20px;font-size:12px}.save-dialog{position:sticky;bottom:0;border:1px solid #daefb0;padding:23px;background:#142e32f5;box-shadow:0 -20px 90px #08171dea;border-radius:17px;z-index:2}
+.save-dialog h2{margin-top:0}.save-dialog label{display:block;font-size:12px;font-weight:700;margin:12px 0}.save-dialog input{display:block;width:100%;border:1px solid #bbdfc788;background:#0b202b;color:#f3ffeb;padding:12px;border-radius:10px;margin-top:6px;user-select:text}.save-dialog input:focus{outline:2px solid #d4f3b1}
+.save-dialog-error{color:#ffd19a!important}.save-screen.is-busy .save-list,.save-screen.is-busy .save-toolbar{pointer-events:none;opacity:.6}
+#save-chip{display:inline-block;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e1f3b8;font-size:10px}
+#swim-status{position:absolute;left:50%;top:calc(50% + 95px);transform:translateX(-50%);padding:9px 13px;border-radius:11px;background:#123846b5;border:1px solid #caeaff70;font-size:11px;text-align:center;color:#e3f7ff}
+.underwater #app::after{background:radial-gradient(ellipse,transparent 25%,#06364277)}.underwater .sun-fx{opacity:0!important}
+.mini-bucket span,.mini-water_bucket span{display:none}.mini-bucket,.mini-water_bucket{height:32px;width:27px;border:3px solid #b5d0d5;border-radius:3px 3px 10px 10px;background:linear-gradient(90deg,#647a83,#d5e4e6 50%,#6e8590);transform:rotate(-7deg)}
+.mini-water_bucket::before{content:'';position:absolute;left:0;right:0;top:0;height:8px;border-radius:50%;background:#62c2f2;box-shadow:0 1px 3px #c9faff}.mini-bucket::after,.mini-water_bucket::after{content:'';position:absolute;left:-4px;right:-4px;top:-8px;height:19px;border:2px solid #d4e2e4;border-bottom:0;border-radius:50%}

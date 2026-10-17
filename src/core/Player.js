@@ -1,3 +1,4 @@
+import { immersion, stepSwimming } from './SwimPhysics.js';
 import { MIN_WORLD_Y, MAX_WORLD_Y, WORLD_HALF } from './Terrain.js';
 import * as THREE from 'three/webgpu';
 import {
@@ -32,6 +33,7 @@ export class Player {
     this.height = PLAYER_HEIGHT;
     this.eyeHeight = 1.62;
     this.isCrouched = false;
+    this.inWater=false;this.submerged=false;this.waterDepth=0;
     this.onGround = false;
     this.jumpBuffer = 0;
     this.coyote = 0;
@@ -65,6 +67,15 @@ export class Player {
   }
 
   step(dt, pressed) {
+    this.inWater=immersion(this.world.water,this.position,this.height)>=.39;
+    this.waterDepth=this.world.water?.pointDepth(this.position.x,this.position.y+this.eyeHeight,this.position.z)||0;
+    this.submerged=this.waterDepth>.035;
+    if(this.inWater) {
+      this.isCrouched=!isSpaceClear(this.world,this.position,PLAYER_HEIGHT);
+      this.height=this.isCrouched?CROUCH_HEIGHT:PLAYER_HEIGHT;
+      stepSwimming(this,this.world,this.world.water,dt,pressed);
+      return;
+    }
     const crouchRequested = pressed.has('ControlLeft') || pressed.has('ControlRight');
     this.isCrouched = crouchRequested || !isSpaceClear(this.world, this.position, PLAYER_HEIGHT);
     this.height = this.isCrouched ? CROUCH_HEIGHT : PLAYER_HEIGHT;
@@ -112,7 +123,7 @@ export class Player {
     const want = this.isCrouched ? 1.16 : 1.62;
     this.eyeHeight += (want - this.eyeHeight) * Math.min(1, dt * 12);
     const horizontal = Math.hypot(this.velocity.x, this.velocity.z);
-    const bob = this.onGround ? Math.sin(this.walkTime) * Math.min(0.027, horizontal * 0.005) : 0;
+    const bob = (this.onGround && !this.inWater) ? Math.sin(this.walkTime) * Math.min(0.027, horizontal * 0.005) : 0;
     this.camera.position.set(this.position.x, this.position.y + this.eyeHeight + bob, this.position.z);
     this.camera.rotation.order = 'YXZ';
     this.camera.rotation.y = this.yaw;
