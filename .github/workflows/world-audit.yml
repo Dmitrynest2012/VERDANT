@@ -1,31 +1,59 @@
-name: World Audit Fixture
+name: World Audit
 on:
   push:
     branches: ['qa/world-biomes-0.1.10009']
 permissions:
-  contents: read
+  contents: write
 jobs:
-  fixture:
+  world:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply reviewed checksum-pinned text changes only
+        run: python .qa/world10009/apply.py
       - run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Archive exact sources and dependencies for tests
+      - run: python -m pip install numpy==2.3.5 Pillow==12.3.0
+      - name: Build the three original 1K material pairs
+        run: python scripts/generate-world-materials.py
+      - run: npm test
+      - name: Build worker and application bundle
+        run: npm run build
+        env:
+          CI: 'false'
+      - run: npx playwright install --with-deps chrome
+      - name: Preserve verified terrain, grass, water and sun fixes
+        run: xvfb-run -a npm run test:render
+      - name: Verify new world, map cache, resources and uninterrupted audio
+        run: xvfb-run -a npm run test:world
+      - name: Verify split release archives
+        run: |
+          python scripts/make-release.py
+          node scripts/verify-release.mjs VERDANT_v0.1.10009_PROJECT.zip VERDANT_v0.1.10009_TEXTURES_1K.zip
+      - name: Record only successfully tested changes on QA branch
         shell: python
         run: |
-          import pathlib, tarfile, subprocess
-          files = subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
-          with tarfile.open('verdant-world-fixture.tar.gz','w:gz') as archive:
-              for name in files:
-                  if name and pathlib.Path(name).is_file(): archive.add(name, arcname=name)
-              archive.add('node_modules',arcname='node_modules')
+          import json, pathlib, subprocess, os
+          assert os.environ['GITHUB_REF']=='refs/heads/qa/world-biomes-0.1.10009'
+          names=json.loads(pathlib.Path('.qa/world10009/changed-files.json').read_text())
+          names += ['public/textures/'+stem+suffix+'.png' for stem in ['granite','iron_ore','sand'] for suffix in ['', '_normal']]
+          subprocess.run(['git','add','--']+names,check=True)
+          if subprocess.run(['git','diff','--cached','--quiet']).returncode:
+              subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+              subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+              subprocess.run(['git','commit','-m','feat: record tested VERDANT 0.1.10009 world, map, audio and materials'],check=True)
+              subprocess.run(['git','push','origin','HEAD:refs/heads/qa/world-biomes-0.1.10009'],check=True)
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: verdant-world-fixture
-          path: verdant-world-fixture.tar.gz
-          retention-days: 3
-          compression-level: 0
+          name: verdant-world-evidence
+          path: |
+            qa-world/
+            qa-results/
+          retention-days: 7
