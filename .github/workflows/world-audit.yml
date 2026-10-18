@@ -1,0 +1,31 @@
+name: World Audit Fixture
+on:
+  push:
+    branches: ['qa/world-biomes-0.1.10009']
+permissions:
+  contents: read
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Archive exact sources and dependencies for tests
+        shell: python
+        run: |
+          import pathlib, tarfile, subprocess
+          files = subprocess.check_output(['git','ls-files','-z']).decode().split('\0')
+          with tarfile.open('verdant-world-fixture.tar.gz','w:gz') as archive:
+              for name in files:
+                  if name and pathlib.Path(name).is_file(): archive.add(name, arcname=name)
+              archive.add('node_modules',arcname='node_modules')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verdant-world-fixture
+          path: verdant-world-fixture.tar.gz
+          retention-days: 3
+          compression-level: 0
